@@ -1,0 +1,98 @@
+name: API
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The workflow always runs, so that the required "API CI" check is always reported;
+  # the expensive jobs only run when the API (or this workflow) actually changed.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+              - '.github/workflows/api.yml'
+
+  checks:
+    name: Lint, test, contract
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: llmchat
+          POSTGRES_PASSWORD: llmchat
+          POSTGRES_DB: llmchat
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U llmchat -d llmchat"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: api/.nvmrc
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npx eslint .
+      - name: Check formatting
+        run: npm run format:check
+      - name: Test (unit + e2e)
+        run: npm test
+        env:
+          TEST_DATABASE_URL: postgresql://llmchat:llmchat@localhost:5432/llmchat_test
+      - name: Check that openapi.json is up to date
+        run: |
+          npm run openapi:export
+          git diff --exit-code -- openapi.json || {
+            echo "::error file=api/openapi.json::openapi.json is outdated: run 'npm run openapi:export' in api/ and commit the result."
+            exit 1
+          }
+
+  # Single, stable check to require in the branch protection of main.
+  status:
+    name: API CI
+    needs: [changes, checks]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the result
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          echo "changes: $CHANGES, checks: $CHECKS"
+          [ "$CHANGES" = "success" ] && { [ "$CHECKS" = "success" ] || [ "$CHECKS" = "skipped" ]; }

@@ -22,7 +22,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "user:create": "tsx src/cli/create-user.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "openapi:export": "nest build && node dist/openapi/export-openapi.js"
   },
   "dependencies": {
     "@nestjs/common": "12.5.1",
