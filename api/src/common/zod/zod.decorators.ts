@@ -18,7 +18,11 @@ export function ZodBody(schema: z.ZodType): ParameterDecorator {
     if (propertyKey === undefined) return;
     const descriptor = Object.getOwnPropertyDescriptor(target, propertyKey);
     if (descriptor) {
-      ApiBody({ schema: toOpenApiSchema(schema, 'input') })(target, propertyKey, descriptor);
+      ApiBody({
+        schema: toOpenApiSchema(schema, 'input'),
+        // Optional when the schema accepts a missing body (e.g. `.default({})`).
+        required: !schema.safeParse(undefined).success,
+      })(target, propertyKey, descriptor);
     }
   };
 }
