@@ -29,16 +29,19 @@ model User {
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  userId    String    @map("user_id")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  messages  Message[]
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  // Time of the last message (user or assistant); createdAt until the first one. Orders the
+  // sidebar: unlike updatedAt, it does not move when the conversation is renamed.
+  lastMessageAt DateTime  @default(now()) @map("last_message_at")
+  messages      Message[]
 
-  // Serves the sidebar query: "conversations of a user, most recent first".
-  @@index([userId, updatedAt(sort: Desc)])
+  // Serves the sidebar query: "conversations of a user, most recently active first".
+  @@index([userId, lastMessageAt(sort: Desc)])
   @@map("conversations")
 }
 
