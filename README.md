@@ -36,4 +36,5 @@ Accepted advisories (not overridden):
 
 npm 11 only runs dependency install scripts that are explicitly allowed (`allowScripts` in
 `package.json`). Allowed in `api`: `prisma` and `@prisma/engines` (download the migration
-engine) and `@swc/core` (checks its native binary). Denied: `@scarf/scarf` (install telemetry).
+engine), `argon2` (loads its prebuilt native binary), `@swc/core` and `esbuild` (check their
+native binaries). Denied: `@scarf/scarf` (install telemetry).

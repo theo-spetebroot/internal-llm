@@ -1,0 +1,42 @@
+import type { Server } from 'node:http';
+
+import type { INestApplication } from '@nestjs/common';
+import { Test, type TestingModuleBuilder } from '@nestjs/testing';
+
+import { AppModule } from '../../src/app.module.js';
+import { configureApp } from '../../src/app.setup.js';
+import { PrismaService } from '../../src/prisma/prisma.service.js';
+
+export interface TestApp {
+  app: INestApplication;
+  /** Underlying HTTP server, to pass to supertest's `request()`. */
+  http: Server;
+  prisma: PrismaService;
+  close: () => Promise<void>;
+}
+
+/**
+ * Boots the real application (same HTTP setup as production) against the test database.
+ * `customize` allows overriding providers, e.g. to swap the LLM provider.
+ */
+export async function createTestApp(
+  customize: (builder: TestingModuleBuilder) => TestingModuleBuilder = (builder) => builder,
+): Promise<TestApp> {
+  const moduleRef = await customize(Test.createTestingModule({ imports: [AppModule] })).compile();
+  const app = moduleRef.createNestApplication();
+  app.useLogger(false);
+  configureApp(app);
+  await app.init();
+
+  return {
+    app,
+    http: app.getHttpServer() as Server,
+    prisma: app.get(PrismaService),
+    close: () => app.close(),
+  };
+}
+
+/** Empties every table (cascades from users) so that each test starts from a clean state. */
+export async function resetDatabase(prisma: PrismaService): Promise<void> {
+  await prisma.$executeRaw`TRUNCATE TABLE users, conversations, messages CASCADE`;
+}
