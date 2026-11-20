@@ -45,7 +45,10 @@ export const conversationSchema = z
     id: z.string(),
     title: z.string(),
     createdAt: z.date(),
+    /** Last modification of the conversation itself (e.g. rename). */
     updatedAt: z.date(),
+    /** Last message sent or received (`createdAt` until then); orders the conversation list. */
+    lastMessageAt: z.date(),
   })
   .meta({ id: 'Conversation' });
 
