@@ -1,0 +1,31 @@
+# Development: only PostgreSQL runs in Docker; api and web run locally with `npm run dev`.
+# Why: on Windows, bind mounts are slow and file watching is unreliable, and native modules
+# installed on the host (argon2, Prisma engines) don't work inside a Linux container.
+# Running the apps locally keeps hot reload fast and debugging straightforward.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Credentials below are for local development only.
+
+name: llm-chat-dev
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: llmchat
+      POSTGRES_PASSWORD: llmchat
+      POSTGRES_DB: llmchat
+    ports:
+      - '5432:5432'
+    volumes:
+      # PostgreSQL 18+ images store data under /var/lib/postgresql (versioned sub-directory).
+      - postgres-dev-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U llmchat -d llmchat']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-dev-data:
