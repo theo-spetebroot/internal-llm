@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { LLM_PROVIDER_NAMES } from '../llm/llm-provider.registry.js';
+
 /**
  * Single source of truth for the API configuration.
  * The app refuses to start when a variable is missing or malformed.
@@ -19,6 +21,19 @@ export const envSchema = z.object({
     .default(7 * 24 * 60 * 60),
   /** Set to true once the app is served over HTTPS (cookie then only sent over TLS). */
   COOKIE_SECURE: z.stringbool().default(false),
+
+  /** Which `LlmProvider` implementation answers (see llm/llm-provider.registry.ts). */
+  LLM_PROVIDER: z.enum(LLM_PROVIDER_NAMES).default('mock'),
+  /** Stream tokens when the provider supports it; otherwise wait for the full answer. */
+  LLM_STREAM: z.stringbool().default(true),
+  /** Full-call timeout (non-streaming) or max silence between tokens (streaming). */
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  /** Optional system prompt prepended to every conversation. */
+  LLM_SYSTEM_PROMPT: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value === '' ? undefined : value)),
 });
 
 export type Env = z.infer<typeof envSchema>;
