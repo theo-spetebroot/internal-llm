@@ -28,6 +28,8 @@ export const envSchema = z.object({
   LLM_STREAM: z.stringbool().default(true),
   /** Full-call timeout (non-streaming) or max silence between tokens (streaming). */
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  /** Maximum length of a user message, in characters. */
+  MAX_MESSAGE_LENGTH: z.coerce.number().int().positive().default(32_000),
   /** Optional system prompt prepended to every conversation. */
   LLM_SYSTEM_PROMPT: z
     .string()
