@@ -1,0 +1,4 @@
+# Normalise line endings so shell scripts and Docker entrypoints stay LF on Windows checkouts.
+* text=auto eol=lf
+*.png binary
+*.ico binary
