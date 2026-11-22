@@ -1,6 +1,6 @@
 import { Menu, PanelLeftOpen, SquarePen } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Outlet } from 'react-router';
 
 import { ChatStoreContext } from '@/chat/chat-context';
@@ -11,6 +11,11 @@ import { readStorage, writeStorage } from '@/lib/storage';
 import { DESKTOP_MEDIA_QUERY, useMediaQuery } from '@/lib/use-media-query';
 
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from './layout.constants';
+import {
+  NEW_CONVERSATION_ARIA_SHORTCUTS,
+  newConversationShortcutLabel,
+  useNewConversationShortcut,
+} from './new-conversation-shortcut';
 import { ShellContext, type ShellContextValue } from './shell-context';
 import { Sidebar } from './Sidebar';
 
@@ -35,6 +40,11 @@ export function AppShell() {
     },
     [chatStore],
   );
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+  }, []);
+  useNewConversationShortcut(closeDrawer);
 
   const showDocked = isDesktop && !collapsed;
 
@@ -74,7 +84,12 @@ export function AppShell() {
 
     const trailing = (
       <Button asChild variant="ghost" size="icon">
-        <Link to="/" aria-label="Nouvelle conversation" title="Nouvelle conversation">
+        <Link
+          to="/"
+          aria-label="Nouvelle conversation"
+          aria-keyshortcuts={NEW_CONVERSATION_ARIA_SHORTCUTS}
+          title={`Nouvelle conversation (${newConversationShortcutLabel()})`}
+        >
           <SquarePen className="size-5" strokeWidth={1.7} aria-hidden="true" />
         </Link>
       </Button>
@@ -102,12 +117,7 @@ export function AppShell() {
           <SheetContent>
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <SheetDescription className="sr-only">Conversations, thème et compte</SheetDescription>
-            <Sidebar
-              variant="drawer"
-              onNavigate={() => {
-                setDrawerOpen(false);
-              }}
-            />
+            <Sidebar variant="drawer" onNavigate={closeDrawer} />
           </SheetContent>
         </Sheet>
       )}

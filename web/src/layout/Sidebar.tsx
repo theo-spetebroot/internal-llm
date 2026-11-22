@@ -9,6 +9,11 @@ import { Button } from '@/components/ui/button';
 import { SheetClose } from '@/components/ui/sheet';
 import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
 
+import {
+  NEW_CONVERSATION_ARIA_SHORTCUTS,
+  newConversationShortcutLabel,
+} from './new-conversation-shortcut';
+
 interface SidebarProps {
   /** Docked (desktop) or inside the mobile drawer. */
   variant: 'docked' | 'drawer';
@@ -47,9 +52,15 @@ export function Sidebar({ variant, onCollapse, onNavigate }: SidebarProps) {
 
       <div className="px-4 pb-4">
         <Button asChild variant="outline" className="w-full justify-start gap-2.5 px-3.5">
-          <Link to="/" onClick={onNavigate}>
+          <Link to="/" onClick={onNavigate} aria-keyshortcuts={NEW_CONVERSATION_ARIA_SHORTCUTS}>
             <Plus className="size-[18px]" strokeWidth={1.8} aria-hidden="true" />
-            Nouvelle conversation
+            <span className="flex-1 text-left">Nouvelle conversation</span>
+            <kbd
+              aria-hidden="true"
+              className="hidden font-mono text-[11px] font-medium text-ink-3 md:inline"
+            >
+              {newConversationShortcutLabel()}
+            </kbd>
           </Link>
         </Button>
       </div>

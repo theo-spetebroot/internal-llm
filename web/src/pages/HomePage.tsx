@@ -1,6 +1,6 @@
 import { CircleAlert } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 import { useCurrentUser } from '@/auth/current-user';
 import { useChatStore } from '@/chat/chat-context';
@@ -13,6 +13,13 @@ import { PageHeader } from '@/layout/PageHeader';
  * message is sent, so that no empty conversation piles up in the sidebar.
  */
 export function HomePage() {
+  // Re-mounted on each visit (including the keyboard shortcut while already here), so the
+  // composer starts empty and focused.
+  const { key } = useLocation();
+  return <NewConversation key={key} />;
+}
+
+function NewConversation() {
   const user = useCurrentUser();
   const store = useChatStore();
   const navigate = useNavigate();
