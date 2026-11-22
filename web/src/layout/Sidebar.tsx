@@ -1,8 +1,10 @@
-import { LogOut, PanelLeftClose, X } from 'lucide-react';
+import { LogOut, PanelLeftClose, Plus, X } from 'lucide-react';
+import { Link } from 'react-router';
 
 import { useCurrentUser } from '@/auth/current-user';
 import { useLogout } from '@/auth/session';
 import { Brand } from '@/components/Brand';
+import { ConversationList } from '@/conversations/ConversationList';
 import { Button } from '@/components/ui/button';
 import { SheetClose } from '@/components/ui/sheet';
 import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
@@ -12,9 +14,11 @@ interface SidebarProps {
   variant: 'docked' | 'drawer';
   /** Docked only: hides the sidebar. */
   onCollapse?: () => void;
+  /** Called when a link is followed (closes the mobile drawer). */
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ variant, onCollapse }: SidebarProps) {
+export function Sidebar({ variant, onCollapse, onNavigate }: SidebarProps) {
   const user = useCurrentUser();
   const logout = useLogout();
 
@@ -41,8 +45,17 @@ export function Sidebar({ variant, onCollapse }: SidebarProps) {
         )}
       </div>
 
-      <nav aria-label="Conversations" className="flex-1 overflow-y-auto px-2 py-1">
-        {/* The conversation list lands with the chat (next step). */}
+      <div className="px-4 pb-4">
+        <Button asChild variant="outline" className="w-full justify-start gap-2.5 px-3.5">
+          <Link to="/" onClick={onNavigate}>
+            <Plus className="size-[18px]" strokeWidth={1.8} aria-hidden="true" />
+            Nouvelle conversation
+          </Link>
+        </Button>
+      </div>
+
+      <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <ConversationList onNavigate={onNavigate} />
       </nav>
 
       <div className="flex flex-col gap-3 border-t border-rule p-4">
