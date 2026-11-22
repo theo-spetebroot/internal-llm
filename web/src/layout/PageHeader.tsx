@@ -8,6 +8,8 @@ import { useShell } from './shell-context';
 interface PageHeaderProps {
   /** Page title; the wordmark is shown instead when there is none. */
   title?: ReactNode;
+  /** Replaces the title heading (e.g. the title being edited). */
+  heading?: ReactNode;
   /** Page actions (rename, delete…), on the right. */
   actions?: ReactNode;
 }
@@ -16,9 +18,22 @@ interface PageHeaderProps {
  * Top bar of a page, holding the shell's navigation buttons when the sidebar is not docked.
  * Renders nothing when it would be empty (docked sidebar, no title, no actions).
  */
-export function PageHeader({ title, actions }: PageHeaderProps) {
+export function PageHeader({ title, heading, actions }: PageHeaderProps) {
   const { leading, trailing } = useShell();
-  if (!leading && title === undefined && !actions) return null;
+  if (!leading && title === undefined && heading === undefined && !actions) return null;
+
+  let content: ReactNode;
+  if (heading !== undefined) {
+    content = heading;
+  } else if (title === undefined) {
+    content = <Brand className="text-xl" />;
+  } else {
+    content = (
+      <h1 className="truncate font-serif text-lg font-medium tracking-[-0.01em] md:text-[22px]">
+        {title}
+      </h1>
+    );
+  }
 
   return (
     <header
@@ -28,15 +43,7 @@ export function PageHeader({ title, actions }: PageHeaderProps) {
       )}
     >
       {leading}
-      <div className={cn('min-w-0 flex-1', leading && 'px-1')}>
-        {title === undefined ? (
-          <Brand className="text-xl" />
-        ) : (
-          <h1 className="truncate font-serif text-lg font-medium tracking-[-0.01em] md:text-[22px]">
-            {title}
-          </h1>
-        )}
-      </div>
+      <div className={cn('min-w-0 flex-1', leading && 'px-1')}>{content}</div>
       {actions}
       {trailing}
     </header>

@@ -9,7 +9,12 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/layout/PageHeader';
 import { NotFoundContent } from '@/pages/NotFoundPage';
 
-import { useConversation, type ConversationDetail } from './conversations-api';
+import { DeleteConversationButton, RenameButton, TitleEditor } from './ConversationActions';
+import {
+  useConversation,
+  useRenameConversation,
+  type ConversationDetail,
+} from './conversations-api';
 import { AssistantMessage, MessageThread, UserMessage } from './MessageThread';
 
 export function ConversationPage() {
@@ -70,6 +75,10 @@ function ConversationView({ conversation }: { conversation: ConversationDetail }
   const store = useChatStore();
   const exchange = useExchange(conversation.id);
   const [draft, setDraft] = useState('');
+  const [editingTitle, setEditingTitle] = useState(false);
+  const rename = useRenameConversation(conversation.id);
+  // Optimistic: the new title shows while it is being saved.
+  const title = rename.isPending ? rename.variables : conversation.title;
   const {
     ref: scroller,
     onScroll,
@@ -92,8 +101,42 @@ function ConversationView({ conversation }: { conversation: ConversationDetail }
 
   return (
     <>
-      <title>{`${conversation.title} · internal-llm`}</title>
-      <PageHeader title={conversation.title} />
+      <title>{`${title} · internal-llm`}</title>
+      <PageHeader
+        title={title}
+        heading={
+          editingTitle ? (
+            <TitleEditor
+              title={title}
+              onSave={(next) => {
+                rename.mutate(next);
+              }}
+              onClose={() => {
+                setEditingTitle(false);
+              }}
+            />
+          ) : undefined
+        }
+        actions={
+          <>
+            <RenameButton
+              onClick={() => {
+                rename.reset();
+                setEditingTitle(true);
+              }}
+            />
+            <DeleteConversationButton conversation={{ ...conversation, title }} />
+          </>
+        }
+      />
+      {rename.isError && (
+        <p
+          role="alert"
+          className="border-b border-rule bg-danger-bg px-5 py-2.5 text-sm text-danger-ink md:px-8"
+        >
+          Le renommage a échoué. Réessayez dans un instant.
+        </p>
+      )}
 
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8 px-5 py-6 md:px-8 md:py-9">

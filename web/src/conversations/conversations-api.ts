@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ApiError, api } from '@/api/client';
 import type { components } from '@/api/schema';
+import { upsertConversation } from '@/chat/conversation-cache';
 
 export type Conversation = components['schemas']['Conversation'];
 export type ConversationDetail = components['schemas']['ConversationDetail'];
@@ -42,6 +43,51 @@ export function useCreateConversation() {
       queryClient.setQueryData<Conversation[]>(conversationKeys.list(), (list) =>
         list ? [conversation, ...list] : list,
       );
+    },
+  });
+}
+
+/** Same rule as the API's UpdateConversationRequest (trimmed, 1 to 200 characters). */
+export const CONVERSATION_TITLE_MAX_LENGTH = 200;
+
+export function useRenameConversation(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (title: string): Promise<Conversation> => {
+      const { data, response } = await api.PATCH('/api/conversations/{id}', {
+        params: { path: { id } },
+        body: { title },
+      });
+      if (!data) throw new ApiError(response.status);
+      return data;
+    },
+    onSuccess: (conversation) => {
+      upsertConversation(queryClient, conversation);
+    },
+    onError: (error) => {
+      // Deleted elsewhere: refresh so that the page shows "not found".
+      if (error instanceof ApiError && error.status === 404) {
+        void queryClient.invalidateQueries({ queryKey: conversationKeys.all });
+      }
+    },
+  });
+}
+
+export function useDeleteConversation(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<void> => {
+      const { response } = await api.DELETE('/api/conversations/{id}', {
+        params: { path: { id } },
+      });
+      // 404: already gone, which is what was asked.
+      if (!response.ok && response.status !== 404) throw new ApiError(response.status);
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<Conversation[]>(conversationKeys.list(), (list) =>
+        list?.filter((conversation) => conversation.id !== id),
+      );
+      queryClient.removeQueries({ queryKey: conversationKeys.detail(id) });
     },
   });
 }

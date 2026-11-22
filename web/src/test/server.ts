@@ -17,6 +17,7 @@ export const TEST_PASSWORD = 'correct horse battery staple';
 
 const loginBodySchema = z.object({ email: z.string(), password: z.string() });
 const sendBodySchema = z.object({ content: z.string() });
+const renameBodySchema = z.object({ title: z.string().trim().min(1).max(200) });
 
 /** How the fake API answers the next messages (see `backend.chat`). */
 export interface ChatScript {
@@ -204,6 +205,26 @@ function streamExchange(conversation: ConversationDetail, content: string, scrip
 }
 
 handlers.push(
+  http.patch('/api/conversations/:id', async ({ params, request }) => {
+    if (!backend.loggedIn) return unauthorized();
+    const conversation = backend.findConversation(String(params['id']));
+    if (!conversation) return notFound();
+    const body: unknown = await request.json();
+    const parsed = renameBodySchema.safeParse(body);
+    if (!parsed.success) return new HttpResponse(null, { status: 400 });
+    conversation.title = parsed.data.title;
+    conversation.updatedAt = new Date().toISOString();
+    return HttpResponse.json(withoutMessages(conversation));
+  }),
+
+  http.delete('/api/conversations/:id', ({ params }) => {
+    if (!backend.loggedIn) return unauthorized();
+    const id = String(params['id']);
+    if (!backend.findConversation(id)) return notFound();
+    backend.conversations = backend.conversations.filter((conversation) => conversation.id !== id);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   http.post('/api/conversations', () => {
     if (!backend.loggedIn) return unauthorized();
     return HttpResponse.json(withoutMessages(backend.addConversation()), { status: 201 });
