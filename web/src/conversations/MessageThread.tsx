@@ -1,5 +1,7 @@
 import { Square } from 'lucide-react';
 
+import { LazyMarkdown } from '@/markdown/LazyMarkdown';
+
 import type { Message } from './conversations-api';
 import { formatMessageTime } from './format-time';
 
@@ -22,8 +24,8 @@ function AssistantMessage({ message }: { message: Message }) {
         <span aria-hidden="true" className="h-px w-3.5 bg-accent" />
         Réponse · <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
       </p>
-      <div className="font-serif text-[17.5px] leading-relaxed whitespace-pre-wrap md:text-[19px]">
-        {message.content}
+      <div className="font-serif text-[17.5px] leading-relaxed md:text-[19px]">
+        <LazyMarkdown>{message.content}</LazyMarkdown>
       </div>
       {message.interrupted && <InterruptedMarker />}
     </article>
