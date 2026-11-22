@@ -14,6 +14,7 @@ interface ConversationBody {
   title: string;
   createdAt: string;
   updatedAt: string;
+  lastMessageAt: string;
 }
 
 describe('Conversations (e2e)', () => {
@@ -50,6 +51,14 @@ describe('Conversations (e2e)', () => {
     return response.body as ConversationBody;
   }
 
+  async function listTitles(cookie: string): Promise<string[]> {
+    const response = await request(http)
+      .get('/api/conversations')
+      .set('Cookie', cookie)
+      .expect(200);
+    return (response.body as ConversationBody[]).map((c) => c.title);
+  }
+
   it.each([
     ['GET', '/api/conversations'],
     ['POST', '/api/conversations'],
@@ -76,6 +85,7 @@ describe('Conversations (e2e)', () => {
         title: DEFAULT_CONVERSATION_TITLE,
         createdAt: expect.any(String) as string,
         updatedAt: expect.any(String) as string,
+        lastMessageAt: conversation.createdAt,
       });
       const stored = await prisma.conversation.findUnique({ where: { id: conversation.id } });
       expect(stored?.userId).toBe(alice.user.id);
@@ -114,22 +124,27 @@ describe('Conversations (e2e)', () => {
         .set('Cookie', aliceCookie)
         .expect(200);
 
-      const titles = (response.body as ConversationBody[]).map((c) => c.title);
-      expect(titles).toEqual(['Newer', 'Older']);
+      expect((response.body as ConversationBody[]).map((c) => c.title)).toEqual(['Newer', 'Older']);
 
-      // Activity on the older conversation brings it back to the top.
+      // A new message in the older conversation brings it back to the top.
       await prisma.conversation.update({
         where: { id: older.id },
-        data: { updatedAt: new Date(Date.parse(newer.updatedAt) + 1_000) },
+        data: { lastMessageAt: new Date(Date.parse(newer.lastMessageAt) + 1_000) },
       });
-      const reordered = await request(http)
-        .get('/api/conversations')
+      expect(await listTitles(aliceCookie)).toEqual(['Older', 'Newer']);
+    });
+
+    it('keeps the order when a conversation is renamed', async () => {
+      const older = await createConversation(aliceCookie, 'Older');
+      await createConversation(aliceCookie, 'Newer');
+
+      await request(http)
+        .patch(`/api/conversations/${older.id}`)
         .set('Cookie', aliceCookie)
+        .send({ title: 'Older, renamed' })
         .expect(200);
-      expect((reordered.body as ConversationBody[]).map((c) => c.title)).toEqual([
-        'Older',
-        'Newer',
-      ]);
+
+      expect(await listTitles(aliceCookie)).toEqual(['Newer', 'Older, renamed']);
     });
   });
 

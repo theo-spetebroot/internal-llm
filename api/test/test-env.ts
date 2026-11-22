@@ -11,4 +11,6 @@ export const TEST_ENV = {
   JWT_SECRET: 'test-only-secret-not-used-anywhere-else-0123456789',
   JWT_EXPIRES_IN_SECONDS: '3600',
   COOKIE_SECURE: 'false',
+  // Small limit so that validation tests stay cheap.
+  MAX_MESSAGE_LENGTH: '100',
 } as const;

@@ -1,32 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { MessageRole } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   type ConversationDetailDto,
   type ConversationDto,
   type CreateConversationInput,
   DEFAULT_CONVERSATION_TITLE,
-  type MessageDto,
-  type MessageRoleDto,
   type UpdateConversationInput,
 } from './conversations.schemas.js';
-
-const conversationSelect = { id: true, title: true, createdAt: true, updatedAt: true } as const;
-
-const messageSelect = {
-  id: true,
-  role: true,
-  content: true,
-  interrupted: true,
-  createdAt: true,
-} as const;
-
-const roleToDto: Record<MessageRole, MessageRoleDto> = {
-  [MessageRole.USER]: 'user',
-  [MessageRole.ASSISTANT]: 'assistant',
-  [MessageRole.SYSTEM]: 'system',
-};
+import { conversationSelect, messageSelect, toMessageDto } from './message.mapper.js';
 
 /**
  * Every query is scoped by `userId`: a conversation owned by someone else is reported as
@@ -36,20 +18,36 @@ const roleToDto: Record<MessageRole, MessageRoleDto> = {
 export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Most recently active first. */
+  /** Most recently active (last message) first; renaming does not change the order. */
   list(userId: string): Promise<ConversationDto[]> {
     return this.prisma.conversation.findMany({
       where: { userId },
       select: conversationSelect,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
     });
   }
 
   create(userId: string, input: CreateConversationInput): Promise<ConversationDto> {
+    const now = new Date();
     return this.prisma.conversation.create({
-      data: { userId, title: input.title ?? DEFAULT_CONVERSATION_TITLE },
+      data: {
+        userId,
+        title: input.title ?? DEFAULT_CONVERSATION_TITLE,
+        createdAt: now,
+        lastMessageAt: now,
+      },
       select: conversationSelect,
     });
+  }
+
+  /** The conversation without its messages; 404 when it does not belong to the user. */
+  async findOwned(userId: string, id: string): Promise<ConversationDto> {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id, userId },
+      select: conversationSelect,
+    });
+    if (!conversation) throw conversationNotFound();
+    return conversation;
   }
 
   /** The conversation with its messages in chronological order. */
@@ -63,13 +61,7 @@ export class ConversationsService {
     });
     if (!conversation) throw conversationNotFound();
 
-    return {
-      ...conversation,
-      messages: conversation.messages.map((message): MessageDto => ({
-        ...message,
-        role: roleToDto[message.role],
-      })),
-    };
+    return { ...conversation, messages: conversation.messages.map(toMessageDto) };
   }
 
   async rename(

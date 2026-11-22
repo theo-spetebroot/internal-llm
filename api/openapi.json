@@ -278,6 +278,63 @@
         ]
       }
     },
+    "/api/conversations/{id}/messages": {
+      "post": {
+        "operationId": "ChatController_send",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-sent events, each `data` being a JSON `ChatEvent`: `start`, then `delta`*, then `done` or `error`. Comment lines (`: ping`) are sent as heartbeats.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or too long message"
+          },
+          "401": {
+            "description": "Missing, invalid or expired session"
+          },
+          "404": {
+            "description": "No such conversation for this user"
+          },
+          "409": {
+            "description": "An answer is already being generated"
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "HealthController_check",
@@ -385,13 +442,18 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
           "id",
           "title",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "lastMessageAt"
         ],
         "additionalProperties": false
       },
@@ -423,6 +485,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastMessageAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "messages": {
             "type": "array",
             "items": {
@@ -435,6 +501,7 @@
           "title",
           "createdAt",
           "updatedAt",
+          "lastMessageAt",
           "messages"
         ],
         "additionalProperties": false
@@ -488,6 +555,134 @@
         "required": [
           "title"
         ]
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "description": "At most MAX_MESSAGE_LENGTH characters (default 32000) once trimmed."
+      },
+      "ChatEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ChatStartEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ChatDeltaEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ChatDoneEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ChatErrorEvent"
+          }
+        ]
+      },
+      "ChatStartEvent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "start"
+            ]
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/Conversation"
+          },
+          "userMessage": {
+            "$ref": "#/components/schemas/Message"
+          }
+        },
+        "required": [
+          "type",
+          "conversation",
+          "userMessage"
+        ],
+        "additionalProperties": false
+      },
+      "ChatDeltaEvent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "delta"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "ChatDoneEvent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "done"
+            ]
+          },
+          "assistantMessage": {
+            "$ref": "#/components/schemas/Message"
+          }
+        },
+        "required": [
+          "type",
+          "assistantMessage"
+        ],
+        "additionalProperties": false
+      },
+      "ChatErrorEvent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "LLM_UNAVAILABLE",
+              "LLM_TIMEOUT",
+              "LLM_ERROR",
+              "INTERNAL"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "assistantMessage": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Message"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "code",
+          "message",
+          "assistantMessage"
+        ],
+        "additionalProperties": false
       },
       "HealthResponse": {
         "type": "object",
