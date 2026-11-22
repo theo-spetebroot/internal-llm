@@ -17,7 +17,8 @@ services:
       POSTGRES_PASSWORD: llmchat
       POSTGRES_DB: llmchat
     ports:
-      - '5432:5432'
+      # Host port overridable with POSTGRES_PORT (root .env or shell) when 5432 is taken.
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       # PostgreSQL 18+ images store data under /var/lib/postgresql (versioned sub-directory).
       - postgres-dev-data:/var/lib/postgresql
