@@ -5,6 +5,7 @@ import { PageHeader } from '@/layout/PageHeader';
 import { NotFoundContent } from '@/pages/NotFoundPage';
 
 import { useConversation } from './conversations-api';
+import { MessageThread } from './MessageThread';
 
 export function ConversationPage() {
   const { conversationId = '' } = useParams();
@@ -52,13 +53,17 @@ export function ConversationPage() {
     );
   }
 
-  const { title } = conversation.data;
+  const { title, messages } = conversation.data;
 
   return (
     <>
       <title>{`${title} · internal-llm`}</title>
       <PageHeader title={title} />
-      <div className="min-h-0 flex-1 overflow-y-auto" />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[720px] px-5 py-6 md:px-8 md:py-9">
+          <MessageThread messages={messages} />
+        </div>
+      </div>
     </>
   );
 }
