@@ -1,0 +1,157 @@
+@import 'tailwindcss';
+
+/* Self-hosted variable fonts: no request leaves the instance. */
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/newsreader/opsz.css';
+@import '@fontsource-variable/newsreader/opsz-italic.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+/* Dark mode follows the `.dark` class set on <html> (see src/theme), not the media query. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * "Ink & paper" palette. Every pair used for text passes WCAG AA (4.5:1) on its background.
+ * shadcn/ui variable names (background, primary, ring…) map onto the same tokens so that
+ * generated components pick up the theme without edits.
+ */
+:root {
+  --paper: #f4f0e6;
+  --sidebar: #ece6d8;
+  --raised: #fbf8f1;
+  --ink: #1a1814;
+  --ink-2: #4f493f;
+  --ink-3: #6b6458;
+  --rule: #dbd3c2;
+  --active: #e2daca;
+  --accent: #c2410c;
+  --accent-hover: #9a3412;
+  --accent-ink: #ffffff;
+  --accent-soft: #f6dccb;
+  --focus: rgb(194 65 12 / 0.22);
+  --danger-bg: #f8e1d6;
+  --danger-ink: #8a2a08;
+  --scrim: rgb(26 24 20 / 0.38);
+  --code-bg: #efe9dc;
+  --code-inline: #e8e0cf;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-ink);
+  --muted: var(--sidebar);
+  --muted-foreground: var(--ink-3);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--accent);
+}
+
+.dark {
+  --paper: #14120e;
+  --sidebar: #1b1813;
+  --raised: #221e18;
+  --ink: #ece6d8;
+  --ink-2: #bdb4a3;
+  --ink-3: #968d7d;
+  --rule: #332e25;
+  --active: #2a251d;
+  --accent: #ff7a45;
+  --accent-hover: #ff9466;
+  --accent-ink: #14120e;
+  --accent-soft: #3a2216;
+  --focus: rgb(255 122 69 / 0.25);
+  --danger-bg: #3a2216;
+  --danger-ink: #ffb899;
+  --scrim: rgb(0 0 0 / 0.55);
+  --code-bg: #1b1813;
+  --code-inline: #2a251d;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-sidebar: var(--sidebar);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-active: var(--active);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus: var(--focus);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-ink: var(--danger-ink);
+  --color-scrim: var(--scrim);
+  --color-code-bg: var(--code-bg);
+  --color-code-inline: var(--code-inline);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Newsreader Variable', ui-serif, Georgia, serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --animate-sheet-in: sheet-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-sheet-out: sheet-out 160ms ease-in;
+  --animate-fade-in: fade-in 220ms ease-out;
+  --animate-fade-out: fade-out 160ms ease-in;
+
+  @keyframes sheet-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes sheet-out {
+    to {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-rule;
+  }
+
+  html {
+    @apply bg-paper text-ink antialiased;
+    /* Avoid layout shifts when scrollbars appear. */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply min-h-dvh font-sans;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
