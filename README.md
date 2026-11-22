@@ -1,4 +1,4 @@
-# llm-chat
+# internal-llm
 
 Web chat interface for a self-hosted open-source LLM.
 

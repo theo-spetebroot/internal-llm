@@ -10,8 +10,8 @@ export const SWAGGER_PATH = `${API_PREFIX}/docs`;
 /** Builds the OpenAPI document — the contract consumed by the web client. */
 export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
-    .setTitle('llm-chat API')
-    .setDescription('REST + SSE API of llm-chat, a web chat interface for a self-hosted LLM.')
+    .setTitle('internal-llm API')
+    .setDescription('REST + SSE API of internal-llm, a web chat interface for a self-hosted LLM.')
     .setVersion('0.1.0')
     .addCookieAuth(SESSION_COOKIE)
     .build();

@@ -7,6 +7,10 @@
 #
 # Credentials below are for local development only.
 
+# The project was first named "llm-chat": the Compose project name and the "llmchat"
+# database, user and password keep that name on purpose. Renaming the project would create a
+# new, empty volume (losing the local database), and renaming the database would force every
+# developer to recreate it, for no functional gain.
 name: llm-chat-dev
 
 services:
