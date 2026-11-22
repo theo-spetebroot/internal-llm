@@ -24,6 +24,52 @@ committed. The web client generates its TypeScript types from that file with
 `web/src/api/schema.d.ts`) and calls the API through [openapi-fetch](https://openapi-ts.dev/openapi-fetch/).
 CI fails when either generated file is out of date.
 
+### Streaming answers (SSE)
+
+`POST /api/conversations/:id/messages` answers with Server-Sent Events, each `data` being a JSON
+`ChatEvent`: `start` (saved user message, conversation possibly auto-titled), `delta`* (pieces of
+the answer), then `done` (saved answer) or `error` (code, partial answer saved as interrupted).
+Comment lines (`: ping`) keep proxies from closing a silent connection.
+
+The Zod schemas live in `api/src/chat/chat.schemas.ts`. The web client keeps a copy in
+`web/src/api/chat-events.ts` and validates every event it receives; a compile-time check fails
+as soon as that copy and the generated `ChatEvent` type diverge.
+
+## Local development
+
+Prerequisites: Node 24 (see `.nvmrc`), Docker.
+
+```sh
+# PostgreSQL (set POSTGRES_PORT in the root .env if 5432 is taken)
+docker compose -f docker-compose.dev.yml up -d
+
+# API — http://localhost:3000, docs at /api/docs
+cd api && cp .env.example .env   # then set JWT_SECRET
+npm ci && npm run db:deploy && npm run start:dev
+npm run user:create              # interactive: email, name, hidden password
+
+# Web — http://localhost:5173 (proxies /api to the API)
+cd web && npm ci && npm run dev
+```
+
+## Web client
+
+- **Stack**: React 19, Vite, TanStack Query, React Router, Tailwind CSS 4 with shadcn/ui
+  primitives restyled on the project's "Ink & paper" tokens (`web/src/styles/index.css`), light,
+  dark and system themes, self-hosted fonts.
+- **Layout**: docked sidebar from 768 px (collapsible), drawer below. Conversations are grouped
+  by last activity; the home page is the new conversation screen (the conversation is created
+  with its first message). <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>
+  (<kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd> on a Mac) opens a new conversation.
+- **Streaming**: a store at the shell level (`web/src/chat/chat-store.ts`) runs each exchange,
+  so an answer keeps streaming across navigation; once it ends, the saved messages move into
+  the query cache. The stop button aborts the request (the API saves the partial answer).
+- **Rendering**: answers are Markdown (react-markdown + remark-gfm, raw HTML never rendered).
+  The Markdown renderer, Shiki (code highlighting, JavaScript regex engine, no WebAssembly) and
+  each language grammar are loaded on demand.
+- **Tests**: Vitest + Testing Library against the real routes and providers, with an in-memory
+  API mocked by MSW (`web/src/test/server.ts`), including the SSE stream.
+
 ## Development workflow
 
 - `main` is protected: every change goes through a pull request from a `feat/`, `fix/`,
