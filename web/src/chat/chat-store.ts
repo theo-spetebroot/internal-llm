@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query';
+import { notifyManager, type QueryClient } from '@tanstack/react-query';
 
 import { readChatEvents } from '@/api/chat-stream';
 import { conversationKeys, type Message } from '@/conversations/conversations-api';
@@ -178,6 +178,11 @@ export class ChatStore {
   private set(conversationId: string, exchange: Exchange | undefined): void {
     if (exchange) this.exchanges.set(conversationId, exchange);
     else this.exchanges.delete(conversationId);
-    for (const listener of this.listeners) listener();
+    // Notify through TanStack Query's scheduler, in the same flush as the query cache updates
+    // made at the same time: when an exchange ends, its messages leave the store and enter
+    // the cache in a single render (otherwise the answer would vanish for a frame).
+    notifyManager.schedule(() => {
+      for (const listener of this.listeners) listener();
+    });
   }
 }

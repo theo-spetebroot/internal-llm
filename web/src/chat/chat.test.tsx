@@ -55,9 +55,13 @@ describe('sending a message', () => {
 
     hold.resolve();
 
+    // The second answer is saved once it shows its time instead of "En train d'écrire…".
     await waitFor(() => {
-      expect(screen.queryByText('En train d’écrire…')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('article', { name: 'Réponse du modèle' })[1]).toHaveTextContent(
+        /Réponse · \d{2}:\d{2}/,
+      );
     });
+    expect(screen.queryByText('En train d’écrire…')).not.toBeInTheDocument();
     const answers = screen.getAllByRole('article', { name: 'Réponse du modèle' });
     expect(answers).toHaveLength(2);
     expect(answers[1]).toHaveTextContent('Gardez le timeout, il protège le flux.');

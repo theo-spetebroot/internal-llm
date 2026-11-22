@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { renderApp } from '@/test/render';
@@ -29,13 +29,10 @@ describe('stopping an answer', () => {
 
     await user.click(screen.getByRole('button', { name: 'Arrêter la réponse' }));
 
-    await waitFor(() => {
-      expect(screen.queryByText('En train d’écrire…')).not.toBeInTheDocument();
-    });
-    const answer = screen.getByRole('article', { name: 'Réponse du modèle' });
+    const answer = (await screen.findByText('Réponse interrompue')).closest('article');
+    expect(screen.queryByText('En train d’écrire…')).not.toBeInTheDocument();
     expect(answer).toHaveTextContent('Il');
     expect(answer).not.toHaveTextContent('conte');
-    expect(within(answer).getByText('Réponse interrompue')).toBeInTheDocument();
     expect(screen.getByRole('article', { name: 'Votre message' })).toHaveTextContent('Raconte');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     release();
