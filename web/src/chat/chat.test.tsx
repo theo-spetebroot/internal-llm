@@ -51,7 +51,7 @@ describe('sending a message', () => {
     await waitFor(() => {
       expect(streaming).toHaveTextContent('Gardez');
     });
-    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Arrêter la réponse' })).toBeInTheDocument();
 
     hold.resolve();
 

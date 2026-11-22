@@ -1,4 +1,4 @@
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Square } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 
@@ -133,7 +133,29 @@ function ConversationView({ conversation }: { conversation: ConversationDetail }
 
       <div className="shrink-0 px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:px-8 md:pb-6">
         <div className="mx-auto w-full max-w-[720px]">
-          <Composer value={draft} onChange={setDraft} onSend={send} busy={inProgress} autoFocus />
+          <Composer
+            value={draft}
+            onChange={setDraft}
+            onSend={send}
+            busy={inProgress}
+            autoFocus
+            action={
+              inProgress ? (
+                <Button
+                  variant="outline"
+                  aria-label="Arrêter la réponse"
+                  title="Arrêter la réponse"
+                  onClick={() => {
+                    store.stop(conversation.id);
+                  }}
+                  className="rounded-full border-accent bg-transparent px-4 text-accent hover:bg-accent-soft"
+                >
+                  <Square className="size-3.5 fill-current" strokeWidth={0} aria-hidden="true" />
+                  <span className="hidden sm:inline">Arrêter</span>
+                </Button>
+              ) : undefined
+            }
+          />
         </div>
       </div>
     </>

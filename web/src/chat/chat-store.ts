@@ -80,7 +80,10 @@ export class ChatStore {
       body = await openChatStream(conversationId, content, exchange.controller.signal);
     } catch (error) {
       if (exchange.controller.signal.aborted) {
+        // Stopped before the API answered: whether it saved the message is unknown.
         this.set(conversationId, undefined);
+        void this.refresh();
+        return 'saved';
       } else {
         const reason = error instanceof SendMessageError ? error.reason : 'unreachable';
         fail(SEND_FAILURE_MESSAGES[reason]);
@@ -111,6 +114,10 @@ export class ChatStore {
       }
       throw new Error('The answer stream ended before the last event');
     } catch {
+      if (exchange.controller.signal.aborted) {
+        this.keepStoppedAnswer(conversationId, exchange);
+        return 'saved';
+      }
       // Network failure or event outside the contract: what the API saved is unknown here,
       // so reload the conversation from it.
       const saved = exchange.userMessage !== null;
@@ -118,6 +125,11 @@ export class ChatStore {
       void this.refresh();
       return saved ? 'saved' : 'not-saved';
     }
+  }
+
+  /** Stops the answer being written in a conversation (the "Arrêter" button). */
+  stop(conversationId: string): void {
+    this.get(conversationId)?.controller.abort();
   }
 
   /** Aborts every exchange in progress (logout, end of the session). */
@@ -129,6 +141,34 @@ export class ChatStore {
   private settle(conversationId: string, exchange: Exchange, answer: Message | null): void {
     const messages = [exchange.userMessage, answer].filter((message) => message !== null);
     appendMessages(this.queryClient, conversationId, messages);
+  }
+
+  /**
+   * The user stopped the answer: the API saves what it generated as an interrupted answer
+   * once it notices the disconnection. Show the received part the same way right away, and
+   * only mark the cache stale: refetching now could run before the API has saved it.
+   */
+  private keepStoppedAnswer(conversationId: string, exchange: Exchange): void {
+    const { userMessage, answer } = exchange;
+    this.set(conversationId, undefined);
+    if (!userMessage) {
+      void this.refresh();
+      return;
+    }
+    const partial: Message | null = answer
+      ? {
+          id: `local-${userMessage.id}`,
+          role: 'assistant',
+          content: answer,
+          interrupted: true,
+          createdAt: new Date().toISOString(),
+        }
+      : null;
+    this.settle(conversationId, exchange, partial);
+    void this.queryClient.invalidateQueries({
+      queryKey: conversationKeys.all,
+      refetchType: 'none',
+    });
   }
 
   private refresh(): Promise<void> {

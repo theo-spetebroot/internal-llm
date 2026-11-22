@@ -151,6 +151,8 @@ function saveMessage(
 
 /** Mimics the API's chat endpoint: saves the messages and streams the answer as SSE. */
 function streamExchange(conversation: ConversationDetail, content: string, script: ChatScript) {
+  let sent = '';
+  let cancelled = false;
   return new ReadableStream<Uint8Array<ArrayBuffer>>({
     async start(controller) {
       if (script.raw) {
@@ -171,8 +173,10 @@ function streamExchange(conversation: ConversationDetail, content: string, scrip
       const words = answer.match(/\S+\s*/g) ?? [];
       for (const [index, word] of words.entries()) {
         controller.enqueue(sseChunk({ type: 'delta', content: word }));
+        sent += word;
         if (index === 0 && script.hold) await script.hold.catch(() => undefined);
         await new Promise((resolve) => setTimeout(resolve, 0));
+        if (cancelled) return;
       }
 
       if (script.error) {
@@ -190,6 +194,11 @@ function streamExchange(conversation: ConversationDetail, content: string, scrip
         controller.enqueue(sseChunk({ type: 'done', assistantMessage }));
       }
       controller.close();
+    },
+    // Client gone (stop button): like the API, keep what was generated as interrupted.
+    cancel() {
+      cancelled = true;
+      if (sent) saveMessage(conversation, 'assistant', sent, true);
     },
   });
 }
