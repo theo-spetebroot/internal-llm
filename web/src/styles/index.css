@@ -34,6 +34,19 @@
   --code-bg: #efe9dc;
   --code-inline: #e8e0cf;
 
+  /* Code highlighting (Shiki "css-variables" theme). AA contrast on --code-bg. */
+  --shiki-foreground: var(--ink);
+  --shiki-background: transparent;
+  --shiki-token-keyword: #9a3412;
+  --shiki-token-string: #3f6212;
+  --shiki-token-string-expression: #3f6212;
+  --shiki-token-constant: #1e40af;
+  --shiki-token-function: #6b21a8;
+  --shiki-token-parameter: var(--ink-2);
+  --shiki-token-punctuation: var(--ink-2);
+  --shiki-token-comment: var(--ink-3);
+  --shiki-token-link: var(--accent);
+
   --background: var(--paper);
   --foreground: var(--ink);
   --primary: var(--accent);
@@ -64,6 +77,12 @@
   --scrim: rgb(0 0 0 / 0.55);
   --code-bg: #1b1813;
   --code-inline: #2a251d;
+
+  --shiki-token-keyword: #ff9466;
+  --shiki-token-string: #b5cf7a;
+  --shiki-token-string-expression: #b5cf7a;
+  --shiki-token-constant: #8fb3ff;
+  --shiki-token-function: #d4b3ff;
 }
 
 @theme inline {
@@ -267,12 +286,18 @@
       font-size: 0.76em;
     }
 
-    & pre {
-      overflow-x: auto;
-      padding: 14px 16px;
+    & .code-block {
+      margin: 0 0 1em;
+      overflow: hidden;
       border: 1px solid var(--rule);
       border-radius: 10px;
       background: var(--code-bg);
+    }
+    & .code-block pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 14px 16px;
+      color: var(--shiki-foreground);
       font-family: var(--font-mono);
       font-size: 13.5px;
       line-height: 1.65;
