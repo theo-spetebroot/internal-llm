@@ -1,0 +1,24 @@
+import type { RouteObject } from 'react-router';
+
+import { LoginPage } from '@/auth/LoginPage';
+import { RequireAuth } from '@/auth/RequireAuth';
+import { AppShell } from '@/layout/AppShell';
+import { HomePage } from '@/pages/HomePage';
+import { NotFoundPage } from '@/pages/NotFoundPage';
+
+/** Shared by the browser router (main.tsx) and the memory router of the tests. */
+export const routes: RouteObject[] = [
+  { path: '/login', Component: LoginPage },
+  {
+    Component: RequireAuth,
+    children: [
+      {
+        Component: AppShell,
+        children: [
+          { index: true, Component: HomePage },
+          { path: '*', Component: NotFoundPage },
+        ],
+      },
+    ],
+  },
+];

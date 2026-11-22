@@ -1,0 +1,85 @@
+name: Web
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The workflow always runs, so that the required "Web CI" check is always reported;
+  # the expensive jobs only run when the web client, its API contract or this workflow changed.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'web/**'
+              - 'api/openapi.json'
+              - '.github/workflows/web.yml'
+
+  checks:
+    name: Lint, test, build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+      - name: Check that the API types are up to date
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.d.ts || {
+            echo "::error file=web/src/api/schema.d.ts::schema.d.ts is outdated: run 'npm run gen:api' in web/ and commit the result."
+            exit 1
+          }
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npx eslint .
+      - name: Check formatting
+        run: npm run format:check
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npx vite build
+
+  # Single, stable check to require in the branch protection of main.
+  status:
+    name: Web CI
+    needs: [changes, checks]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the result
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          echo "changes: $CHANGES, checks: $CHECKS"
+          [ "$CHANGES" = "success" ] && { [ "$CHECKS" = "success" ] || [ "$CHECKS" = "skipped" ]; }

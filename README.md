@@ -19,8 +19,10 @@ its own. They only communicate over HTTP.
 
 The API is the source of truth: Zod schemas validate requests and generate the Swagger
 document. `npm run openapi:export` (in `api/`) writes it to `api/openapi.json`, which is
-committed; the web client generates its TypeScript types from that file. CI fails when
-`openapi.json` is out of date.
+committed. The web client generates its TypeScript types from that file with
+[openapi-typescript](https://openapi-ts.dev/) (`npm run gen:api` in `web/`, output committed in
+`web/src/api/schema.d.ts`) and calls the API through [openapi-fetch](https://openapi-ts.dev/openapi-fetch/).
+CI fails when either generated file is out of date.
 
 ## Development workflow
 
@@ -29,7 +31,9 @@ committed; the web client generates its TypeScript types from that file. CI fail
 - Pull requests are squash-merged once CI is green.
 - CI ([GitHub Actions](.github/workflows/)) runs one workflow per project, only doing the work
   when that project changed. API: typecheck, lint, formatting, unit + e2e tests against a
-  PostgreSQL service, and the `openapi.json` freshness check.
+  PostgreSQL service, and the `openapi.json` freshness check. Web (also run when `api/openapi.json`
+  changes): generated types freshness check, typecheck, lint, formatting, tests (Vitest, Testing
+  Library, MSW), production build.
 
 ## Technical notes
 
@@ -38,9 +42,10 @@ committed; the web client generates its TypeScript types from that file. CI fail
 Each override lives in the `overrides` field of the project's `package.json` and must be
 re-evaluated (and removed if possible) whenever the parent dependency is upgraded.
 
-| Project | Package  | Forced to | Why                                                                                                                                                                                                                                                                   |
-| ------- | -------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api`   | `effect` | `3.22.5`  | `prisma@7.10.1` (through `@prisma/config`) pins `effect@3.20.0`, affected by a high-severity ReDoS ([GHSA-7589-6fvf-x4pw](https://github.com/advisories/GHSA-7589-6fvf-x4pw)). `3.22.5` is a patched release of the same major. Remove when Prisma ships a fixed pin. |
+| Project | Package                                 | Forced to                  | Why                                                                                                                                                                                                                                                                   |
+| ------- | --------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api`   | `effect`                                | `3.22.5`                   | `prisma@7.10.1` (through `@prisma/config`) pins `effect@3.20.0`, affected by a high-severity ReDoS ([GHSA-7589-6fvf-x4pw](https://github.com/advisories/GHSA-7589-6fvf-x4pw)). `3.22.5` is a patched release of the same major. Remove when Prisma ships a fixed pin. |
+| `web`   | `typescript` (for `openapi-typescript`) | the project's `typescript` | `openapi-typescript@7.13.0` declares a `typescript@^5` peer dependency, while the project uses TypeScript 6 (same compiler API). It generates `src/api/schema.d.ts`, whose freshness CI checks. Remove when openapi-typescript accepts TypeScript 6.                  |
 
 Accepted advisories (not overridden):
 
@@ -53,4 +58,5 @@ Accepted advisories (not overridden):
 npm 11 only runs dependency install scripts that are explicitly allowed (`allowScripts` in
 `package.json`). Allowed in `api`: `prisma` and `@prisma/engines` (download the migration
 engine), `argon2` (loads its prebuilt native binary), `@swc/core` and `esbuild` (check their
-native binaries). Denied: `@scarf/scarf` (install telemetry).
+native binaries). Denied: `@scarf/scarf` (install telemetry). `web` allows none: its only
+candidate, `fsevents` (macOS file watching, shipped prebuilt), is denied.
