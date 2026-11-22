@@ -1,33 +1,76 @@
 import { Square } from 'lucide-react';
+import type { ReactNode } from 'react';
 
+import { cn } from '@/lib/utils';
 import { LazyMarkdown } from '@/markdown/LazyMarkdown';
 
 import type { Message } from './conversations-api';
 import { formatMessageTime } from './format-time';
 
 /** A user message: a "slip" of raised paper, on the right. */
-function UserMessage({ message }: { message: Message }) {
+export function UserMessage({ content }: { content: string }) {
   return (
     <article aria-label="Votre message" className="flex justify-end">
       <div className="max-w-[85%] rounded-[14px_14px_4px_14px] border border-rule bg-raised px-4 py-3 leading-normal whitespace-pre-wrap md:max-w-[78%] md:px-[18px] md:py-3.5">
-        {message.content}
+        {content}
       </div>
     </article>
   );
 }
 
+interface AssistantMessageProps {
+  content: string;
+  /** Saved answers show their time; one being written shows "En train d'écrire…". */
+  createdAt?: string;
+  streaming?: boolean;
+  interrupted?: boolean;
+  /** Shown under the answer (e.g. the stop button while streaming). */
+  footer?: ReactNode;
+}
+
 /** An answer of the model: unboxed prose under a small "Réponse · time" line. */
-function AssistantMessage({ message }: { message: Message }) {
+export function AssistantMessage({
+  content,
+  createdAt,
+  streaming = false,
+  interrupted = false,
+  footer,
+}: AssistantMessageProps) {
   return (
-    <article aria-label="Réponse du modèle">
-      <p className="mb-3 flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">
+    <article aria-label="Réponse du modèle" aria-busy={streaming || undefined}>
+      <p
+        className={cn(
+          'mb-3 flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] uppercase',
+          streaming ? 'text-accent' : 'text-ink-3',
+        )}
+      >
         <span aria-hidden="true" className="h-px w-3.5 bg-accent" />
-        Réponse · <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+        {streaming || !createdAt ? (
+          'En train d’écrire…'
+        ) : (
+          <>
+            Réponse · <time dateTime={createdAt}>{formatMessageTime(createdAt)}</time>
+          </>
+        )}
       </p>
-      <div className="font-serif text-[17.5px] leading-relaxed md:text-[19px]">
-        <LazyMarkdown>{message.content}</LazyMarkdown>
+      <div
+        className={cn(
+          'font-serif text-[17.5px] leading-relaxed md:text-[19px]',
+          streaming && 'is-streaming',
+        )}
+      >
+        {content === '' && streaming ? (
+          <span className="typing-dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        ) : (
+          <LazyMarkdown>{content}</LazyMarkdown>
+        )}
       </div>
-      {message.interrupted && <InterruptedMarker />}
+      {interrupted && <InterruptedMarker />}
+      {footer}
     </article>
   );
 }
@@ -41,27 +84,24 @@ export function InterruptedMarker() {
   );
 }
 
-/** The messages of a conversation, oldest first. System messages are not shown. */
+/** The saved messages of a conversation, oldest first. System messages are not shown. */
 export function MessageThread({ messages }: { messages: Message[] }) {
   const visible = messages.filter((message) => message.role !== 'system');
 
-  if (visible.length === 0) {
-    return (
-      <p className="py-16 text-center font-serif text-lg text-ink-3 italic">
-        Aucun message pour l’instant.
-      </p>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-8">
+    <>
       {visible.map((message) =>
         message.role === 'user' ? (
-          <UserMessage key={message.id} message={message} />
+          <UserMessage key={message.id} content={message.content} />
         ) : (
-          <AssistantMessage key={message.id} message={message} />
+          <AssistantMessage
+            key={message.id}
+            content={message.content}
+            createdAt={message.createdAt}
+            interrupted={message.interrupted}
+          />
         ),
       )}
-    </div>
+    </>
   );
 }

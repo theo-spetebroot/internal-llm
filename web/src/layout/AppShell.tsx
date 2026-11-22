@@ -1,7 +1,10 @@
 import { Menu, PanelLeftOpen, SquarePen } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Outlet } from 'react-router';
 
+import { ChatStoreContext } from '@/chat/chat-context';
+import { ChatStore } from '@/chat/chat-store';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { readStorage, writeStorage } from '@/lib/storage';
@@ -22,6 +25,16 @@ export function AppShell() {
     () => readStorage(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true',
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [chatStore] = useState(() => new ChatStore(queryClient));
+
+  // Leaving the authenticated area (logout, expired session) stops the answers in progress.
+  useEffect(
+    () => () => {
+      chatStore.abortAll();
+    },
+    [chatStore],
+  );
 
   const showDocked = isDesktop && !collapsed;
 
@@ -99,11 +112,13 @@ export function AppShell() {
         </Sheet>
       )}
 
-      <ShellContext value={shell}>
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Outlet />
-        </main>
-      </ShellContext>
+      <ChatStoreContext value={chatStore}>
+        <ShellContext value={shell}>
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <Outlet />
+          </main>
+        </ShellContext>
+      </ChatStoreContext>
     </div>
   );
 }

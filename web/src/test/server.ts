@@ -2,6 +2,7 @@ import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { z } from 'zod';
 
+import type { ChatErrorCode, ChatEvent } from '@/api/chat-events';
 import type { User } from '@/api/client';
 import type { ConversationDetail, Message } from '@/conversations/conversations-api';
 
@@ -15,6 +16,26 @@ export const testUser: User = {
 export const TEST_PASSWORD = 'correct horse battery staple';
 
 const loginBodySchema = z.object({ email: z.string(), password: z.string() });
+const sendBodySchema = z.object({ content: z.string() });
+
+/** How the fake API answers the next messages (see `backend.chat`). */
+export interface ChatScript {
+  /** The answer, streamed word by word. Default: "Réponse à : <message>". */
+  answer?: string;
+  /** End with an `error` event instead, after streaming `partial` (saved as interrupted). */
+  error?: { code: ChatErrorCode; partial?: string };
+  /** The stream pauses after its first delta until this promise settles. */
+  hold?: Promise<unknown>;
+  /** Raw SSE chunks to send instead of a well-formed exchange (contract violations). */
+  raw?: string[];
+}
+
+const DEFAULT_TITLE = 'Nouvelle conversation';
+const encoder = new TextEncoder();
+
+function sseChunk(event: ChatEvent): Uint8Array<ArrayBuffer> {
+  return encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+}
 
 let nextId = 1;
 
@@ -26,11 +47,15 @@ export const backend = {
   loggedIn: false,
   loginRequests: 0,
   conversations: [] as ConversationDetail[],
+  chat: {} as ChatScript,
+  sendRequests: 0,
 
   reset() {
     this.loggedIn = false;
     this.loginRequests = 0;
     this.conversations = [];
+    this.chat = {};
+    this.sendRequests = 0;
     nextId = 1;
   },
 
@@ -42,7 +67,7 @@ export const backend = {
     const id = fields.id ?? `conversation-${nextId++}`;
     const conversation: ConversationDetail = {
       id,
-      title: fields.title ?? 'Nouvelle conversation',
+      title: fields.title ?? DEFAULT_TITLE,
       createdAt: fields.createdAt ?? now,
       updatedAt: fields.updatedAt ?? now,
       lastMessageAt: fields.lastMessageAt ?? now,
@@ -100,5 +125,94 @@ export const handlers = [
     return conversation ? HttpResponse.json(conversation) : notFound();
   }),
 ];
+
+function withoutMessages({ messages: _messages, ...conversation }: ConversationDetail) {
+  return conversation;
+}
+
+function saveMessage(
+  conversation: ConversationDetail,
+  role: Message['role'],
+  content: string,
+  interrupted = false,
+): Message {
+  const createdAt = new Date().toISOString();
+  const message: Message = {
+    id: `${conversation.id}-message-${conversation.messages.length + 1}`,
+    role,
+    content,
+    interrupted,
+    createdAt,
+  };
+  conversation.messages.push(message);
+  conversation.lastMessageAt = createdAt;
+  return message;
+}
+
+/** Mimics the API's chat endpoint: saves the messages and streams the answer as SSE. */
+function streamExchange(conversation: ConversationDetail, content: string, script: ChatScript) {
+  return new ReadableStream<Uint8Array<ArrayBuffer>>({
+    async start(controller) {
+      if (script.raw) {
+        for (const chunk of script.raw) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+        return;
+      }
+
+      if (conversation.title === DEFAULT_TITLE) conversation.title = content.slice(0, 50);
+      const userMessage = saveMessage(conversation, 'user', content);
+      controller.enqueue(
+        sseChunk({ type: 'start', conversation: withoutMessages(conversation), userMessage }),
+      );
+
+      const answer = script.error
+        ? (script.error.partial ?? '')
+        : (script.answer ?? `Réponse à : ${content}`);
+      const words = answer.match(/\S+\s*/g) ?? [];
+      for (const [index, word] of words.entries()) {
+        controller.enqueue(sseChunk({ type: 'delta', content: word }));
+        if (index === 0 && script.hold) await script.hold.catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      if (script.error) {
+        const partial = answer ? saveMessage(conversation, 'assistant', answer, true) : null;
+        controller.enqueue(
+          sseChunk({
+            type: 'error',
+            code: script.error.code,
+            message: 'Generic error',
+            assistantMessage: partial,
+          }),
+        );
+      } else {
+        const assistantMessage = saveMessage(conversation, 'assistant', answer);
+        controller.enqueue(sseChunk({ type: 'done', assistantMessage }));
+      }
+      controller.close();
+    },
+  });
+}
+
+handlers.push(
+  http.post('/api/conversations', () => {
+    if (!backend.loggedIn) return unauthorized();
+    return HttpResponse.json(withoutMessages(backend.addConversation()), { status: 201 });
+  }),
+
+  http.post('/api/conversations/:id/messages', async ({ params, request }) => {
+    if (!backend.loggedIn) return unauthorized();
+    backend.sendRequests += 1;
+    const conversation = backend.findConversation(String(params['id']));
+    if (!conversation) return notFound();
+    const body: unknown = await request.json();
+    const { content } = sendBodySchema.parse(body);
+    if (content.trim() === '') return new HttpResponse(null, { status: 400 });
+
+    return new HttpResponse(streamExchange(conversation, content.trim(), backend.chat), {
+      headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+    });
+  }),
+);
 
 export const server = setupServer(...handlers);

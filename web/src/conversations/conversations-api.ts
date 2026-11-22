@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ApiError, api } from '@/api/client';
 import type { components } from '@/api/schema';
@@ -21,6 +21,27 @@ export function useConversations() {
       const { data, response } = await api.GET('/api/conversations');
       if (!data) throw new ApiError(response.status);
       return data;
+    },
+  });
+}
+
+/** Creates an empty conversation (titled from its first message by the API) and caches it. */
+export function useCreateConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<Conversation> => {
+      const { data, response } = await api.POST('/api/conversations', { body: {} });
+      if (!data) throw new ApiError(response.status);
+      return data;
+    },
+    onSuccess: (conversation) => {
+      queryClient.setQueryData<ConversationDetail>(conversationKeys.detail(conversation.id), {
+        ...conversation,
+        messages: [],
+      });
+      queryClient.setQueryData<Conversation[]>(conversationKeys.list(), (list) =>
+        list ? [conversation, ...list] : list,
+      );
     },
   });
 }
