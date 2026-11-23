@@ -34,6 +34,19 @@
   --code-bg: #efe9dc;
   --code-inline: #e8e0cf;
 
+  /* Code highlighting (Shiki "css-variables" theme). AA contrast on --code-bg. */
+  --shiki-foreground: var(--ink);
+  --shiki-background: transparent;
+  --shiki-token-keyword: #9a3412;
+  --shiki-token-string: #3f6212;
+  --shiki-token-string-expression: #3f6212;
+  --shiki-token-constant: #1e40af;
+  --shiki-token-function: #6b21a8;
+  --shiki-token-parameter: var(--ink-2);
+  --shiki-token-punctuation: var(--ink-2);
+  --shiki-token-comment: var(--ink-3);
+  --shiki-token-link: var(--accent);
+
   --background: var(--paper);
   --foreground: var(--ink);
   --primary: var(--accent);
@@ -64,6 +77,12 @@
   --scrim: rgb(0 0 0 / 0.55);
   --code-bg: #1b1813;
   --code-inline: #2a251d;
+
+  --shiki-token-keyword: #ff9466;
+  --shiki-token-string: #b5cf7a;
+  --shiki-token-string-expression: #b5cf7a;
+  --shiki-token-constant: #8fb3ff;
+  --shiki-token-function: #d4b3ff;
 }
 
 @theme inline {
@@ -152,6 +171,212 @@
     *::after {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Answers of the model, rendered from Markdown (src/markdown). Sizes are relative to the
+   serif body set by the message (17.5px on mobile, 19px from md). */
+@layer components {
+  .prose-answer {
+    overflow-wrap: anywhere;
+
+    & > :first-child {
+      margin-top: 0;
+    }
+    & > :last-child {
+      margin-bottom: 0;
+    }
+
+    & p,
+    & ul,
+    & ol,
+    & blockquote,
+    & pre,
+    & .table-scroll {
+      margin: 0 0 1em;
+    }
+
+    & h1,
+    & h2,
+    & h3,
+    & h4 {
+      margin: 1.4em 0 0.5em;
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+    & h1 {
+      font-size: 1.45em;
+    }
+    & h2 {
+      font-size: 1.3em;
+    }
+    & h3 {
+      font-size: 1.15em;
+    }
+    & h4 {
+      font-size: 1em;
+    }
+
+    & strong {
+      font-weight: 600;
+    }
+
+    & a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 0.18em;
+      text-decoration-thickness: 1px;
+      &:hover {
+        color: var(--accent-hover);
+      }
+    }
+
+    & ul,
+    & ol {
+      padding-left: 1.4em;
+    }
+    & ul {
+      list-style: disc;
+    }
+    & ol {
+      list-style: decimal;
+    }
+    & li {
+      margin: 0 0 0.4em;
+      padding-left: 0.2em;
+    }
+    & li > ul,
+    & li > ol {
+      margin: 0.4em 0 0;
+    }
+    & li::marker {
+      color: var(--accent);
+      font-family: var(--font-sans);
+      font-size: 0.75em;
+    }
+    /* GFM task lists. */
+    & li:has(> input[type='checkbox']) {
+      list-style: none;
+    }
+    & input[type='checkbox'] {
+      margin-right: 0.5em;
+      accent-color: var(--accent);
+    }
+
+    & blockquote {
+      padding-left: 1em;
+      border-left: 2px solid var(--rule);
+      color: var(--ink-2);
+      font-style: italic;
+    }
+
+    & hr {
+      margin: 1.6em 0;
+      border: 0;
+      border-top: 1px solid var(--rule);
+    }
+
+    & :not(pre) > code {
+      padding: 0.1em 0.3em;
+      border-radius: 4px;
+      background: var(--code-inline);
+      font-family: var(--font-mono);
+      font-size: 0.76em;
+    }
+
+    & .code-block {
+      margin: 0 0 1em;
+      overflow: hidden;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      background: var(--code-bg);
+    }
+    & .code-block pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 14px 16px;
+      color: var(--shiki-foreground);
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.65;
+    }
+
+    & .table-scroll {
+      overflow-x: auto;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+    }
+    & table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-sans);
+      font-size: 14px;
+    }
+    & th,
+    & td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--rule);
+      text-align: left;
+      vertical-align: top;
+    }
+    & th {
+      background: var(--sidebar);
+      font-weight: 600;
+    }
+    & tr:last-child td {
+      border-bottom: 0;
+    }
+  }
+}
+
+/* Answer being written: a blinking ink caret after the last block, three dots before the
+   first token. */
+@layer components {
+  .is-streaming .prose-answer > :last-child::after {
+    content: '';
+    display: inline-block;
+    width: 0.45em;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    background: var(--accent);
+    animation: caret-blink 1.05s steps(1) infinite;
+  }
+
+  .typing-dots {
+    display: inline-flex;
+    gap: 5px;
+    padding: 0.5em 0;
+    & span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: typing-dot 1.2s ease-in-out infinite;
+    }
+    & span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+    & span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+  }
+
+  @keyframes caret-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes typing-dot {
+    0%,
+    60%,
+    100% {
+      opacity: 0.25;
+    }
+    30% {
+      opacity: 1;
     }
   }
 }

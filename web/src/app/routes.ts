@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router';
 
 import { LoginPage } from '@/auth/LoginPage';
 import { RequireAuth } from '@/auth/RequireAuth';
+import { ConversationPage } from '@/conversations/ConversationPage';
 import { AppShell } from '@/layout/AppShell';
 import { HomePage } from '@/pages/HomePage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
         Component: AppShell,
         children: [
           { index: true, Component: HomePage },
+          { path: 'c/:conversationId', Component: ConversationPage },
           { path: '*', Component: NotFoundPage },
         ],
       },

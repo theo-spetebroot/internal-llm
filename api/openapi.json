@@ -368,8 +368,8 @@
     }
   },
   "info": {
-    "title": "llm-chat API",
-    "description": "REST + SSE API of llm-chat, a web chat interface for a self-hosted LLM.",
+    "title": "internal-llm API",
+    "description": "REST + SSE API of internal-llm, a web chat interface for a self-hosted LLM.",
     "version": "0.1.0",
     "contact": {}
   },

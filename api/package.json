@@ -1,8 +1,8 @@
 {
-  "name": "llm-chat-api",
+  "name": "internal-llm-api",
   "version": "0.1.0",
   "private": true,
-  "description": "REST + SSE API for llm-chat (NestJS, Prisma, PostgreSQL)",
+  "description": "REST + SSE API for internal-llm (NestJS, Prisma, PostgreSQL)",
   "type": "module",
   "engines": {
     "node": ">=24.15.0"

@@ -1,8 +1,10 @@
 import { Link } from 'react-router';
 
 import { buttonVariants } from '@/components/ui/button';
+import { PageHeader } from '@/layout/PageHeader';
 
-export function NotFoundPage() {
+/** "Not found" message, also used for a conversation that does not exist for this user. */
+export function NotFoundContent() {
   return (
     <div className="mx-auto flex min-h-full max-w-[720px] flex-col justify-center gap-5 px-6 py-16 md:px-8">
       <title>Page introuvable · internal-llm</title>
@@ -12,5 +14,16 @@ export function NotFoundPage() {
         Retour à l’accueil
       </Link>
     </div>
+  );
+}
+
+export function NotFoundPage() {
+  return (
+    <>
+      <PageHeader />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <NotFoundContent />
+      </div>
+    </>
   );
 }
