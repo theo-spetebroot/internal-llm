@@ -1,3 +1,7 @@
+<!-- Complete with the number of the issue this PR closes, e.g. "Closes #12". -->
+
+Closes #
+
 ## Context
 
 <!-- Why this change? Link the related issue or plan step. -->
@@ -20,6 +24,10 @@
 
 ## Checklist
 
+<!-- Branch: type/<issue number>-<slug>, e.g. feat/12-llm-logs. Milestone and labels: as the issue. -->
+
+- [ ] Branch named after its issue (`type/<issue number>-<slug>`)
+- [ ] Milestone and labels set like the issue
 - [ ] Conventional commit title
 - [ ] Lint, typecheck and tests pass locally
 - [ ] `api/openapi.json` regenerated if the API contract changed (`npm run openapi:export`)
