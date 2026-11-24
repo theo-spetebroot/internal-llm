@@ -9,6 +9,8 @@
 # (see .env.example). For day-to-day development, use docker-compose.dev.yml instead.
 name: internal-llm
 
+x-database-url: &database-url postgresql://${POSTGRES_USER:-internal_llm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-internal_llm}
+
 services:
   postgres:
     image: postgres:18.7-alpine
@@ -26,6 +28,19 @@ services:
       timeout: 3s
       retries: 10
 
+  # One-shot: applies the pending database migrations, then exits. The API starts once it has
+  # succeeded, so `docker compose up` still migrates automatically.
+  migrate:
+    build:
+      context: ./api
+      target: migrate
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: *database-url
+
   api:
     build: ./api
     restart: unless-stopped
@@ -33,8 +48,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-internal_llm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-internal_llm}
+      DATABASE_URL: *database-url
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
       JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-604800}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
