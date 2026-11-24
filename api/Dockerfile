@@ -32,8 +32,20 @@ FROM build AS prod-deps-runtime
 # dependency of the Prisma packages that is also a dev dependency.
 RUN npm pkg delete dependencies.prisma devDependencies && npm prune --omit=dev
 
+# --- Base of the migrate and runtime images: Node without npm, corepack and yarn ---------------
+# Nothing runs them there. Deleting files in a layer on top of the Node image would not shrink
+# the image (the layers below keep them), so the trimmed file system is copied into a fresh
+# image: a single layer, with the same content minus those tools.
+FROM ${NODE_IMAGE} AS node-trimmed
+RUN rm -rf /usr/local/lib/node_modules /opt/yarn-v* \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+  /usr/local/bin/yarn /usr/local/bin/yarnpkg
+
+FROM scratch AS base
+COPY --from=node-trimmed / /
+
 # --- Migrations: applies the pending ones, then exits ----------------------------------------
-FROM ${NODE_IMAGE} AS migrate
+FROM base AS migrate
 # OpenSSL: required by Prisma's migration engine, absent from slim.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl \
@@ -52,7 +64,7 @@ USER node
 CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
 
 # --- Runtime ---------------------------------------------------------------------------------
-FROM ${NODE_IMAGE} AS runtime
+FROM base AS runtime
 
 ENV NODE_ENV=production \
   PORT=3000
