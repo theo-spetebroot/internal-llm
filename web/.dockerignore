@@ -1,0 +1,9 @@
+# Only what the image build needs: sources, public files, config, npm manifests.
+node_modules
+dist
+coverage
+.env
+.env.*
+*.log
+Dockerfile
+.dockerignore
