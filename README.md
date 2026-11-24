@@ -20,16 +20,29 @@ At the root: `docker-compose.yml` (the whole app in containers), `docker-compose
 
 ## Running with Docker
 
-Prerequisite: Docker with Compose. The app runs with the `mock` LLM provider by default (fake
-streamed answers, no model server needed).
+Prerequisites: Docker with Compose, and Node (any recent version, only used to generate the
+secrets). The app runs with the `mock` LLM provider by default (fake streamed answers, no model
+server needed).
 
-```sh
-cp .env.example .env
-# Set the two required secrets in .env:
-#   POSTGRES_PASSWORD  →  openssl rand -hex 32
-#   JWT_SECRET         →  openssl rand -base64 48
-docker compose up -d --build
-```
+1. Create your `.env`:
+
+   ```sh
+   cp .env.example .env
+   ```
+
+2. Fill in the two required secrets, `POSTGRES_PASSWORD` and `JWT_SECRET`. They are empty in
+   `.env.example` on purpose: Compose refuses to start without them. Run this command twice
+   (it works the same in any shell) and paste one result for each:
+
+   ```sh
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+
+3. Start the stack:
+
+   ```sh
+   docker compose up -d --build
+   ```
 
 The app is served at http://localhost:8080 (`WEB_PORT` in `.env`). There is no public sign-up:
 create the first user from the API container (interactive: email, name, hidden password):
@@ -84,11 +97,13 @@ Prerequisites: Node 24 (see `.nvmrc`), Docker. Only PostgreSQL runs in a contain
 the web client run on the host, with hot reload.
 
 ```sh
-# PostgreSQL (set POSTGRES_PORT in the root .env if 5432 is taken)
+# PostgreSQL (if 5432 is taken, set POSTGRES_PORT in the root .env and use the same port in
+# DATABASE_URL and TEST_DATABASE_URL of api/.env)
 docker compose -f docker-compose.dev.yml up -d
 
 # API — http://localhost:3000, docs at /api/docs
-cd api && cp .env.example .env   # then set JWT_SECRET
+# api/.env.example works unchanged in local development (its JWT secret is a placeholder)
+cd api && cp .env.example .env
 npm ci && npm run db:deploy && npm run start:dev
 npm run user:create              # interactive: email, name, hidden password
 
@@ -126,7 +141,9 @@ cd web && npm ci && npm run dev
   tests (Vitest, Testing Library, MSW), production build and the Docker image build. Docker (run
   when `api/`, `web/` or `docker-compose.yml` changed): starts the Compose stack, waits for every
   service to be healthy, then checks the API health, the web client and a full streamed exchange
-  through Nginx.
+  through Nginx; it also checks that every variable read by a Compose file is documented in the
+  root `.env.example`. The API tests check that `api/.env.example` lists exactly the variables of
+  the Zod schema (plus `TEST_DATABASE_URL`) and is valid as it is.
 
 ## Technical notes
 
