@@ -47,6 +47,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.env == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Compare the variables of the Compose files with .env.example
@@ -72,6 +73,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.stack == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       BASE_URL: http://localhost:8080
     steps:

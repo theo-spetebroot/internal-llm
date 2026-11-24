@@ -71,6 +71,30 @@ docker compose down               # stop (add -v to also delete the database vol
 Every variable of `.env.example` is passed to the containers. Set `COOKIE_SECURE=true` once the
 app is served over HTTPS.
 
+### Published images
+
+Every merge to `main` publishes both images to GitHub Container Registry
+(`.github/workflows/publish.yml`), for `linux/amd64` only:
+
+| Image                                      | Content                        |
+| ------------------------------------------ | ------------------------------ |
+| `ghcr.io/theo-spetebroot/internal-llm-api` | The API                        |
+| `ghcr.io/theo-spetebroot/internal-llm-web` | The web client served by Nginx |
+
+Tags: `latest` (the last merge to `main`) and `sha-<short commit hash>` (that exact commit: use
+it to pin a version). Both images are always built from the same commit, so `latest` and a given
+`sha-…` tag always form a consistent API / web pair.
+
+```sh
+docker pull ghcr.io/theo-spetebroot/internal-llm-api:latest
+docker pull ghcr.io/theo-spetebroot/internal-llm-web:latest
+```
+
+Pulling needs no login once the packages are public (package settings → Danger Zone → Change
+visibility: a one-time step after the first publish, since new packages are private).
+`docker-compose.yml` still builds from the sources; a Compose file that pulls these images comes
+with the VPS deployment.
+
 ## API contract
 
 The API is the source of truth: Zod schemas validate requests and generate the Swagger
@@ -143,7 +167,9 @@ cd web && npm ci && npm run dev
   service to be healthy, then checks the API health, the web client and a full streamed exchange
   through Nginx; it also checks that every variable read by a Compose file is documented in the
   root `.env.example`. The API tests check that `api/.env.example` lists exactly the variables of
-  the Zod schema (plus `TEST_DATABASE_URL`) and is valid as it is.
+  the Zod schema (plus `TEST_DATABASE_URL`) and is valid as it is. Publish (push to `main`):
+  builds both images and pushes them to GitHub Container Registry. The Docker jobs are limited to
+  15 minutes.
 
 ## Technical notes
 

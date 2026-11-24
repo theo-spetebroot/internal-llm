@@ -74,6 +74,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -83,7 +84,9 @@ jobs:
           context: web
           push: false
           cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
+          # min: only the layers of the final image are exported. Exporting every stage (max)
+          # once took 18 minutes for the web image, whose build stage is large and cheap to redo.
+          cache-to: type=gha,scope=web,mode=min
 
   # Single, stable check to require in the branch protection of main.
   status:
