@@ -1,0 +1,12 @@
+# Only what the image build needs: sources, Prisma schema and migrations, npm manifests.
+node_modules
+dist
+coverage
+src/generated
+test
+**/*.spec.ts
+.env
+.env.*
+*.log
+Dockerfile
+.dockerignore
