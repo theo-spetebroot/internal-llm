@@ -1,0 +1,57 @@
+# The whole application in containers, built from this repository (production-like).
+#
+#   cp .env.example .env              # then set POSTGRES_PASSWORD and JWT_SECRET
+#   docker compose up -d --build      # http://localhost:8080 (WEB_PORT)
+#   docker compose exec api node dist/cli/create-user.js
+#
+# Only the web container publishes a port: Nginx serves the client and proxies /api to the
+# API, which reaches PostgreSQL over the internal network. Variables come from the root .env
+# (see .env.example). For day-to-day development, use docker-compose.dev.yml instead.
+name: internal-llm
+
+services:
+  postgres:
+    image: postgres:18.7-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-internal_llm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-internal_llm}
+    volumes:
+      # PostgreSQL 18+ images store data under /var/lib/postgresql (versioned sub-directory).
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-internal_llm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-internal_llm}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
+      JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-604800}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MAX_MESSAGE_LENGTH: ${MAX_MESSAGE_LENGTH:-32000}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_STREAM: ${LLM_STREAM:-true}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-60000}
+      LLM_SYSTEM_PROMPT: ${LLM_SYSTEM_PROMPT:-}
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${WEB_PORT:-8080}:8080'
+
+volumes:
+  postgres-data:
