@@ -13,7 +13,50 @@ Web chat interface for a self-hosted open-source LLM.
 | `web/` | React + Vite front-end (TanStack Query, Tailwind, shadcn/ui) |
 
 `api/` and `web/` are two independent npm projects: each one installs, runs, tests and builds on
-its own. They only communicate over HTTP.
+its own, and has its own Dockerfile. They only communicate over HTTP.
+
+At the root: `docker-compose.yml` (the whole app in containers), `docker-compose.dev.yml`
+(PostgreSQL only, for local development) and `.env.example` (variables for both).
+
+## Running with Docker
+
+Prerequisite: Docker with Compose. The app runs with the `mock` LLM provider by default (fake
+streamed answers, no model server needed).
+
+```sh
+cp .env.example .env
+# Set the two required secrets in .env:
+#   POSTGRES_PASSWORD  →  openssl rand -hex 32
+#   JWT_SECRET         →  openssl rand -base64 48
+docker compose up -d --build
+```
+
+The app is served at http://localhost:8080 (`WEB_PORT` in `.env`). There is no public sign-up:
+create the first user from the API container (interactive: email, name, hidden password):
+
+```sh
+docker compose exec api node dist/cli/create-user.js
+```
+
+What runs:
+
+| Service    | Image                                                       | Role                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres` | `postgres:18.7-alpine`                                      | Database, kept in the `postgres-data` volume. Not reachable from the host.                                                                                                    |
+| `api`      | `api/Dockerfile` (Node, Debian slim, non-root)              | Applies pending migrations (`prisma migrate deploy`) on every start, then serves the API. Starts once the database is healthy; health check on `/api/health`.                 |
+| `web`      | `web/Dockerfile` (Vite build, unprivileged Nginx, non-root) | Serves the client and proxies `/api` to the API, without buffering on the streamed answers route. Falls back to `index.html` for client-side routes. The only published port. |
+
+Everyday commands:
+
+```sh
+docker compose logs -f api        # follow the API logs
+docker compose ps                 # status and health of each service
+git pull && docker compose up -d --build   # update (migrations run on start)
+docker compose down               # stop (add -v to also delete the database volume)
+```
+
+Every variable of `.env.example` is passed to the containers. Set `COOKIE_SECURE=true` once the
+app is served over HTTPS.
 
 ## API contract
 
@@ -37,7 +80,8 @@ as soon as that copy and the generated `ChatEvent` type diverge.
 
 ## Local development
 
-Prerequisites: Node 24 (see `.nvmrc`), Docker.
+Prerequisites: Node 24 (see `.nvmrc`), Docker. Only PostgreSQL runs in a container; the API and
+the web client run on the host, with hot reload.
 
 ```sh
 # PostgreSQL (set POSTGRES_PORT in the root .env if 5432 is taken)
@@ -77,9 +121,12 @@ cd web && npm ci && npm run dev
 - Pull requests are squash-merged once CI is green.
 - CI ([GitHub Actions](.github/workflows/)) runs one workflow per project, only doing the work
   when that project changed. API: typecheck, lint, formatting, unit + e2e tests against a
-  PostgreSQL service, and the `openapi.json` freshness check. Web (also run when `api/openapi.json`
-  changes): generated types freshness check, typecheck, lint, formatting, tests (Vitest, Testing
-  Library, MSW), production build.
+  PostgreSQL service, the `openapi.json` freshness check and the Docker image build. Web (also run
+  when `api/openapi.json` changes): generated types freshness check, typecheck, lint, formatting,
+  tests (Vitest, Testing Library, MSW), production build and the Docker image build. Docker (run
+  when `api/`, `web/` or `docker-compose.yml` changed): starts the Compose stack, waits for every
+  service to be healthy, then checks the API health, the web client and a full streamed exchange
+  through Nginx.
 
 ## Technical notes
 

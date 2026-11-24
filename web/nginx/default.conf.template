@@ -1,0 +1,58 @@
+# Nginx site configuration. Template: ${API_UPSTREAM} is replaced at container start (only
+# the variables defined in the environment are substituted, Nginx's own $variables are kept).
+
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    server_tokens off;
+
+    gzip on;
+    gzip_vary on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # --- API -------------------------------------------------------------------------------
+    location /api/ {
+        proxy_pass http://${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Streamed answers (Server-Sent Events): every chunk must reach the browser at once.
+    location ~ ^/api/conversations/[^/]+/messages$ {
+        proxy_pass http://${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        # Maximum silence between two chunks. The API sends `: ping` comments while waiting
+        # and ends the stream itself after LLM_TIMEOUT_MS without tokens.
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # --- Web client ------------------------------------------------------------------------
+    # Hashed file names: cache forever.
+    location /assets/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    # index.html and the other unhashed files: always revalidated. Unknown paths fall back to
+    # index.html, where the client-side router takes over (single-page app).
+    location / {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri /index.html;
+    }
+}
