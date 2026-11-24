@@ -53,16 +53,18 @@ docker compose exec api node dist/cli/create-user.js
 
 What runs:
 
-| Service    | Image                                                       | Role                                                                                                                                                                          |
-| ---------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `postgres` | `postgres:18.7-alpine`                                      | Database, kept in the `postgres-data` volume. Not reachable from the host.                                                                                                    |
-| `api`      | `api/Dockerfile` (Node, Debian slim, non-root)              | Applies pending migrations (`prisma migrate deploy`) on every start, then serves the API. Starts once the database is healthy; health check on `/api/health`.                 |
-| `web`      | `web/Dockerfile` (Vite build, unprivileged Nginx, non-root) | Serves the client and proxies `/api` to the API, without buffering on the streamed answers route. Falls back to `index.html` for client-side routes. The only published port. |
+| Service    | Image                                                            | Role                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres` | `postgres:18.7-alpine`                                           | Database, kept in the `postgres-data` volume. Not reachable from the host.                                                                                                    |
+| `migrate`  | `api/Dockerfile`, `migrate` target (Node, Debian slim, non-root) | One-shot: applies the pending migrations (`prisma migrate deploy`) on every `up`, then exits. Starts once the database is healthy.                                            |
+| `api`      | `api/Dockerfile` (Node, Debian slim, non-root)                   | Serves the API. Starts once the database is healthy and `migrate` has succeeded; health check on `/api/health`. Does not contain the Prisma CLI, hence the separate service.  |
+| `web`      | `web/Dockerfile` (Vite build, unprivileged Nginx, non-root)      | Serves the client and proxies `/api` to the API, without buffering on the streamed answers route. Falls back to `index.html` for client-side routes. The only published port. |
 
 Everyday commands:
 
 ```sh
 docker compose logs -f api        # follow the API logs
+docker compose logs migrate       # what the last migration run did
 docker compose ps                 # status and health of each service
 git pull && docker compose up -d --build   # update (migrations run on start)
 docker compose down               # stop (add -v to also delete the database volume)
@@ -73,20 +75,24 @@ app is served over HTTPS.
 
 ### Published images
 
-Every merge to `main` publishes both images to GitHub Container Registry
+Every merge to `main` publishes three images to GitHub Container Registry
 (`.github/workflows/publish.yml`), for `linux/amd64` only:
 
-| Image                                      | Content                        |
-| ------------------------------------------ | ------------------------------ |
-| `ghcr.io/theo-spetebroot/internal-llm-api` | The API                        |
-| `ghcr.io/theo-spetebroot/internal-llm-web` | The web client served by Nginx |
+| Image                                          | Content                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| `ghcr.io/theo-spetebroot/internal-llm-api`     | The API                                                                  |
+| `ghcr.io/theo-spetebroot/internal-llm-migrate` | One-shot job that applies the database migrations, to run before the API |
+| `ghcr.io/theo-spetebroot/internal-llm-web`     | The web client served by Nginx                                           |
 
 Tags: `latest` (the last merge to `main`) and `sha-<short commit hash>` (that exact commit: use
-it to pin a version). Both images are always built from the same commit, so `latest` and a given
-`sha-…` tag always form a consistent API / web pair.
+it to pin a version). The three images are always built from the same commit, so `latest` and a
+given `sha-…` tag always form a consistent set. The `migrate` image is built from `api/Dockerfile`
+(`migrate` target): the API image no longer contains the Prisma CLI, so pulling a new API version
+means running the matching `migrate` image first, as `docker-compose.yml` does.
 
 ```sh
 docker pull ghcr.io/theo-spetebroot/internal-llm-api:latest
+docker pull ghcr.io/theo-spetebroot/internal-llm-migrate:latest
 docker pull ghcr.io/theo-spetebroot/internal-llm-web:latest
 ```
 
@@ -168,7 +174,7 @@ cd web && npm ci && npm run dev
   through Nginx; it also checks that every variable read by a Compose file is documented in the
   root `.env.example`. The API tests check that `api/.env.example` lists exactly the variables of
   the Zod schema (plus `TEST_DATABASE_URL`) and is valid as it is. Publish (push to `main`):
-  builds both images and pushes them to GitHub Container Registry. The Docker jobs are limited to
+  builds the three images and pushes them to GitHub Container Registry. The Docker jobs are limited to
   15 minutes.
 
 ## Technical notes
