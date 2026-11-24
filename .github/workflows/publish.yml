@@ -1,9 +1,10 @@
 name: Publish
 
-# Publishes the API and web images to GitHub Container Registry at every merge to main, so that
-# the deployment can pull them. Both images are published at every merge, even when only one
-# project changed: `latest` and `sha-…` then always designate a consistent API / web pair.
-# If one of the two jobs fails, re-run the failed job to bring the pair back in sync.
+# Publishes the API, migrate (database migrations, built from api/) and web images to GitHub
+# Container Registry at every merge to main, so that the deployment can pull them. All three are
+# published at every merge, even when only one project changed: `latest` and `sha-…` then always
+# designate a consistent set. If one of the jobs fails, re-run the failed job to bring the set
+# back in sync.
 
 on:
   push:
@@ -33,9 +34,24 @@ jobs:
       matrix:
         include:
           - image: api
+            context: api
+            cache_from: api
+            cache_to: api
             cache_mode: max
+          # Same Dockerfile as the API image, other target. It reads the API cache, which already
+          # holds its stages, and only exports its few last layers (to a scope of its own, so as
+          # not to overwrite the API one).
+          - image: migrate
+            context: api
+            target: migrate
+            cache_from: api
+            cache_to: migrate
+            cache_mode: min
           # The web build stage is large and cheap to redo: export the final layers only.
           - image: web
+            context: web
+            cache_from: web
+            cache_to: web
             cache_mode: min
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,14 +80,15 @@ jobs:
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: ${{ matrix.image }}
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Same cache scopes as the API / Web workflows.
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,scope=${{ matrix.image }},mode=${{ matrix.cache_mode }}
+          # The API and web scopes are the ones of the API / Web workflows.
+          cache-from: type=gha,scope=${{ matrix.cache_from }}
+          cache-to: type=gha,scope=${{ matrix.cache_to }},mode=${{ matrix.cache_mode }}
 
       - name: Summary
         env:
