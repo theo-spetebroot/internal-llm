@@ -100,6 +100,14 @@ jobs:
           push: false
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
+      # Shares its stages with the image above, which is built first and exports them.
+      - name: Build the migrate image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: api
+          target: migrate
+          push: false
+          cache-from: type=gha,scope=api
 
   # Single, stable check to require in the branch protection of main.
   status:
