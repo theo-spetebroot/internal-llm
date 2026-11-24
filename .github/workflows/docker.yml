@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       stack: ${{ steps.filter.outputs.stack }}
+      env: ${{ steps.filter.outputs.env }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -33,6 +34,38 @@ jobs:
               - 'web/**'
               - 'docker-compose.yml'
               - '.github/workflows/docker.yml'
+            env:
+              - '.env.example'
+              - 'docker-compose.yml'
+              - 'docker-compose.dev.yml'
+              - '.github/workflows/docker.yml'
+
+  # A variable read by a Compose file but missing from .env.example is a setting nobody can
+  # discover: fail as soon as one is added without being documented.
+  env-example:
+    name: Compose variables are documented
+    needs: changes
+    if: needs.changes.outputs.env == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare the variables of the Compose files with .env.example
+        run: |
+          set -euo pipefail
+          sed -nE 's/^([A-Z][A-Z0-9_]*)=.*/\1/p' .env.example | sort -u > documented.txt
+          status=0
+          for file in docker-compose.yml docker-compose.dev.yml; do
+            docker compose -f "$file" config --variables --format json | jq -r 'keys[]' | sort -u > used.txt
+            missing="$(comm -23 used.txt documented.txt)"
+            if [ -n "$missing" ]; then
+              for name in $missing; do
+                echo "::error file=.env.example::$name is used by $file but is not documented in .env.example"
+              done
+              status=1
+            fi
+            echo "$file: $(wc -l < used.txt) variables, all documented: $([ -z "$missing" ] && echo yes || echo no)"
+          done
+          exit $status
 
   e2e:
     name: Compose stack end to end
@@ -104,7 +137,7 @@ jobs:
   # Single, stable check to require in the branch protection of main.
   status:
     name: Docker CI
-    needs: [changes, e2e]
+    needs: [changes, e2e, env-example]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -112,6 +145,8 @@ jobs:
         env:
           CHANGES: ${{ needs.changes.result }}
           E2E: ${{ needs.e2e.result }}
+          ENV_EXAMPLE: ${{ needs.env-example.result }}
         run: |
-          echo "changes: $CHANGES, e2e: $E2E"
-          [ "$CHANGES" = "success" ] && { [ "$E2E" = "success" ] || [ "$E2E" = "skipped" ]; }
+          echo "changes: $CHANGES, e2e: $E2E, env-example: $ENV_EXAMPLE"
+          ok() { [ "$1" = "success" ] || [ "$1" = "skipped" ]; }
+          [ "$CHANGES" = "success" ] && ok "$E2E" && ok "$ENV_EXAMPLE"
