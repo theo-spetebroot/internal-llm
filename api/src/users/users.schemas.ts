@@ -18,6 +18,7 @@ export const userSchema = z
     id: z.string(),
     email: z.string(),
     displayName: z.string(),
+    role: z.enum(['USER', 'ADMIN']),
     createdAt: z.date(),
   })
   .meta({ id: 'User' });

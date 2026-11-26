@@ -124,6 +124,8 @@ export interface components {
             id: string;
             email: string;
             displayName: string;
+            /** @enum {string} */
+            role: "USER" | "ADMIN";
             /** Format: date-time */
             createdAt: string;
         };
