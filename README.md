@@ -5,6 +5,22 @@ Web chat interface for a self-hosted open-source LLM.
 > 🚧 Work in progress — the full documentation (architecture, getting started, configuration,
 > adding an LLM provider) lands with the end of milestone 1.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/chat-light.png" alt="Conversation in the light theme: a mock answer with Markdown, a list and a TypeScript code block" width="100%"></td>
+    <td><img src="docs/screenshots/chat-dark.png" alt="Conversation in the dark theme: the same mock answer with Markdown, a list and a TypeScript code block" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/login.png" alt="Sign-in page with the e-mail and password fields and the invitation-only notice" width="100%"></td>
+    <td><img src="docs/screenshots/new-chat.png" alt="New conversation screen with a greeting and the message field, in the dark theme" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/mobile-chat.png" alt="Conversation on a phone-sized screen, with the menu button at the top and the message field at the bottom" width="300"></td>
+  </tr>
+</table>
+
 ## Repository layout
 
 | Folder | Content                                                      |
