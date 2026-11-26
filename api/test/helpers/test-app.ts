@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import type { INestApplication } from '@nestjs/common';
+import type { INestApplication, Type } from '@nestjs/common';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 
 import { AppModule } from '../../src/app.module.js';
@@ -17,12 +17,16 @@ export interface TestApp {
 
 /**
  * Boots the real application (same HTTP setup as production) against the test database.
- * `customize` allows overriding providers, e.g. to swap the LLM provider.
+ * `customize` allows overriding providers, e.g. to swap the LLM provider. `extraModules` adds
+ * modules that exist only for the tests (e.g. a probe controller), never the application.
  */
 export async function createTestApp(
   customize: (builder: TestingModuleBuilder) => TestingModuleBuilder = (builder) => builder,
+  extraModules: Type[] = [],
 ): Promise<TestApp> {
-  const moduleRef = await customize(Test.createTestingModule({ imports: [AppModule] })).compile();
+  const moduleRef = await customize(
+    Test.createTestingModule({ imports: [AppModule, ...extraModules] }),
+  ).compile();
   const app = moduleRef.createNestApplication();
   app.useLogger(false);
   configureApp(app);
