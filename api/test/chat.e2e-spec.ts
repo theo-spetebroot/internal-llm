@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_CONVERSATION_TITLE } from '../src/conversations/conversations.schemas.js';
 import { sleep } from '../src/llm/abort.utils.js';
+import { LlmCallRecorder } from '../src/llm/llm-call.recorder.js';
 import { LLM_OPTIONS, LLM_PROVIDER, type LlmOptions } from '../src/llm/llm.service.js';
 import type { LlmMessage, LlmProvider, LlmRequestOptions } from '../src/llm/llm.types.js';
 import { MOCK_ERROR_TRIGGER, MockLlmProvider } from '../src/llm/providers/mock.provider.js';
@@ -206,6 +207,61 @@ describe('Chat (e2e)', () => {
       );
       expect(assistant.interrupted).toBe(true);
       expect(assistant.content.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('call records', () => {
+    /** Records are written in the background: flush them before reading. */
+    async function callRecords() {
+      await testApp.app.get(LlmCallRecorder).flush();
+      return prisma.llmCall.findMany({ orderBy: { startedAt: 'asc' } });
+    }
+
+    it('writes one completed record per exchange, for the sender', async () => {
+      await sendAndParse('Hello');
+
+      const records = await callRecords();
+      const alice = await prisma.user.findFirstOrThrow();
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({
+        userId: alice.id,
+        conversationId,
+        provider: 'recording',
+        outcome: 'COMPLETED',
+        errorCode: null,
+      });
+      expect(records[0]?.timeToFirstTokenMs).toEqual(expect.any(Number));
+    });
+
+    it('writes one record for each exchange', async () => {
+      await sendAndParse('first');
+      await sendAndParse('second');
+
+      expect(await callRecords()).toHaveLength(2);
+    });
+
+    it('records a provider failure as ERROR with its code', async () => {
+      await sendAndParse(`Break ${MOCK_ERROR_TRIGGER}`);
+
+      expect(await callRecords()).toMatchObject([{ outcome: 'ERROR', errorCode: 'LLM_ERROR' }]);
+    });
+
+    it('records a client disconnect as INTERRUPTED', async () => {
+      provider.tokenDelayMs = 20;
+      await openStreamAndDisconnect();
+
+      const record = await waitFor(async () => (await prisma.llmCall.findFirst()) ?? undefined);
+      expect(record).toMatchObject({ outcome: 'INTERRUPTED', errorCode: null });
+    });
+
+    it('keeps the records when the conversation is deleted, unlinked from it', async () => {
+      await sendAndParse('Hello');
+      await request(http)
+        .delete(`/api/conversations/${conversationId}`)
+        .set('Cookie', cookie)
+        .expect(204);
+
+      expect(await callRecords()).toMatchObject([{ conversationId: null, outcome: 'COMPLETED' }]);
     });
   });
 

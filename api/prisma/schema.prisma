@@ -17,6 +17,13 @@ enum MessageRole {
   SYSTEM
 }
 
+enum LlmCallOutcome {
+  COMPLETED
+  INTERRUPTED
+  ERROR
+  TIMEOUT
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -24,6 +31,7 @@ model User {
   displayName   String         @map("display_name")
   createdAt     DateTime       @default(now()) @map("created_at")
   conversations Conversation[]
+  llmCalls      LlmCall[]
 
   @@map("users")
 }
@@ -39,6 +47,7 @@ model Conversation {
   // sidebar: unlike updatedAt, it does not move when the conversation is renamed.
   lastMessageAt DateTime  @default(now()) @map("last_message_at")
   messages      Message[]
+  llmCalls      LlmCall[]
 
   // Serves the sidebar query: "conversations of a user, most recently active first".
   @@index([userId, lastMessageAt(sort: Desc)])
@@ -58,4 +67,28 @@ model Message {
   // Serves "messages of a conversation in chronological order".
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+// One row per LLM call, written when the call ends. Holds no prompt or answer text: those live
+// in `messages`. Kept when a conversation is deleted (the conversation link becomes NULL), and
+// removed with its user.
+model LlmCall {
+  id                 String         @id @default(cuid())
+  userId             String         @map("user_id")
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId     String?        @map("conversation_id")
+  conversation       Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  provider           String
+  startedAt          DateTime       @map("started_at")
+  durationMs         Int            @map("duration_ms")
+  // Null when no token was produced (error or timeout before the first token).
+  timeToFirstTokenMs Int?           @map("time_to_first_token_ms")
+  outcome            LlmCallOutcome
+  // Error code (`LLM_ERROR`, `LLM_TIMEOUT`…) when the outcome is ERROR or TIMEOUT.
+  errorCode          String?        @map("error_code")
+
+  // Serves the per-user stats, and the global stats and retention purge by date.
+  @@index([userId, startedAt])
+  @@index([startedAt])
+  @@map("llm_calls")
 }

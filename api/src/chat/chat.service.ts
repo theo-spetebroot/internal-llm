@@ -84,13 +84,14 @@ export class ChatService {
    * ends the stream; when the client is gone (`signal` aborted), nothing more is emitted.
    */
   async *answer(
+    userId: string,
     conversationId: string,
     history: LlmMessage[],
     signal: AbortSignal,
   ): AsyncGenerator<ChatEvent> {
     let content = '';
     try {
-      for await (const delta of this.llm.generate(history, signal)) {
+      for await (const delta of this.llm.generate(history, signal, { userId, conversationId })) {
         content += delta;
         yield { type: 'delta', content: delta };
       }
