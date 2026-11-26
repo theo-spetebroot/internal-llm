@@ -22,6 +22,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "user:create": "tsx src/cli/create-user.ts",
+    "user:promote": "tsx src/cli/promote-user.ts",
     "postinstall": "prisma generate",
     "openapi:export": "nest build && node dist/openapi/export-openapi.js"
   },
