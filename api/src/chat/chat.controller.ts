@@ -78,7 +78,12 @@ export class ChatController {
       sse.open();
       sse.send({ type: 'start', conversation, userMessage });
 
-      for await (const event of this.chat.answer(conversationId, history, clientGone.signal)) {
+      for await (const event of this.chat.answer(
+        user.id,
+        conversationId,
+        history,
+        clientGone.signal,
+      )) {
         sse.send(event);
       }
     } catch (error) {
