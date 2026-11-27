@@ -86,8 +86,7 @@ export class LlmService {
     try {
       armTimeout();
       if (this.options.stream && this.provider.chatStream) {
-        const tokens = this.provider.chatStream(messages, { signal: controller.signal });
-        const iterator = tokens[Symbol.asyncIterator]();
+        const iterator = this.provider.chatStream(messages, { signal: controller.signal });
         try {
           for (;;) {
             const result = await raceAbort(iterator.next(), controller.signal);
@@ -98,15 +97,15 @@ export class LlmService {
           }
         } finally {
           // Lets the provider release its resources (HTTP stream…) on early exit.
-          void iterator.return?.();
+          void iterator.return(undefined);
         }
       } else {
-        const answer = await raceAbort(
+        const { text } = await raceAbort(
           this.provider.chat(messages, { signal: controller.signal }),
           controller.signal,
         );
         markFirstToken();
-        yield answer;
+        yield text;
       }
       outcome = LlmCallOutcome.COMPLETED;
     } catch (error) {

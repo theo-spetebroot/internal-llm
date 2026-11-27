@@ -26,9 +26,9 @@ function fakeProvider(tokens: string[], delayMs = 0): FakeProvider {
     calls,
     chat(messages) {
       calls.push({ method: 'chat', messages });
-      return Promise.resolve(tokens.join(''));
+      return Promise.resolve({ text: tokens.join('') });
     },
-    async *chatStream(messages) {
+    async *chatStream(messages): AsyncGenerator<string, undefined> {
       calls.push({ method: 'chatStream', messages });
       for (const token of tokens) {
         await wait(delayMs);
@@ -88,7 +88,7 @@ describe('LlmService', () => {
     it('falls back to chat() when the provider cannot stream', async () => {
       const oneShotProvider: LlmProvider = {
         name: 'one-shot',
-        chat: () => Promise.resolve('Hello'),
+        chat: () => Promise.resolve({ text: 'Hello' }),
       };
       const service = newService(oneShotProvider);
       expect(await collect(service)).toEqual(['Hello']);
@@ -130,7 +130,7 @@ describe('LlmService', () => {
       const provider: LlmProvider = {
         name: 'stalling',
         chat: () => never(),
-        async *chatStream() {
+        async *chatStream(): AsyncGenerator<string, undefined> {
           yield 'first';
           await never();
         },

@@ -1,6 +1,6 @@
 import { sleep } from '../abort.utils.js';
 import { LlmError } from '../llm.errors.js';
-import type { LlmMessage, LlmProvider, LlmRequestOptions } from '../llm.types.js';
+import type { LlmChatResult, LlmMessage, LlmProvider, LlmRequestOptions } from '../llm.types.js';
 
 export interface MockProviderOptions {
   /** Delay between two streamed tokens, in milliseconds. */
@@ -21,15 +21,19 @@ export class MockLlmProvider implements LlmProvider {
     private readonly options: MockProviderOptions = { tokenDelayMs: { min: 20, max: 40 } },
   ) {}
 
-  async chat(messages: LlmMessage[], { signal }: LlmRequestOptions): Promise<string> {
-    let answer = '';
+  async chat(messages: LlmMessage[], { signal }: LlmRequestOptions): Promise<LlmChatResult> {
+    let text = '';
     for await (const token of this.chatStream(messages, { signal })) {
-      answer += token;
+      text += token;
     }
-    return answer;
+    return { text };
   }
 
-  async *chatStream(messages: LlmMessage[], { signal }: LlmRequestOptions): AsyncIterable<string> {
+  /** Reports no usage: the figures are estimated by `LlmService`. */
+  async *chatStream(
+    messages: LlmMessage[],
+    { signal }: LlmRequestOptions,
+  ): AsyncGenerator<string, undefined> {
     const prompt = messages.findLast((message) => message.role === 'user')?.content ?? '';
     const shouldFail = prompt.includes(MOCK_ERROR_TRIGGER);
     const tokens = tokenize(buildAnswer(prompt));

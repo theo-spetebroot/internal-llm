@@ -17,7 +17,7 @@ describe('MockLlmProvider', () => {
   it('streams many tokens that concatenate into the full answer', async () => {
     const { signal } = new AbortController();
     const tokens = await collect(fast.chatStream(history, { signal }));
-    const full = await fast.chat(history, { signal });
+    const { text: full } = await fast.chat(history, { signal });
 
     expect(tokens.length).toBeGreaterThan(10);
     expect(tokens.join('')).toBe(full);
@@ -25,8 +25,18 @@ describe('MockLlmProvider', () => {
     expect(full).toContain('```ts');
   });
 
+  it('reports no usage, so that the figures are estimated', async () => {
+    const { signal } = new AbortController();
+    const stream = fast.chatStream(history, { signal });
+    let step = await stream.next();
+    while (!step.done) step = await stream.next();
+
+    expect(step.value).toBeUndefined();
+    expect((await fast.chat(history, { signal })).usage).toBeUndefined();
+  });
+
   it('answers to the last user message', async () => {
-    const answer = await fast.chat(
+    const { text: answer } = await fast.chat(
       [
         { role: 'user', content: 'first' },
         { role: 'assistant', content: 'ok' },

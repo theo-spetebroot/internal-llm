@@ -8,7 +8,12 @@ import { DEFAULT_CONVERSATION_TITLE } from '../src/conversations/conversations.s
 import { sleep } from '../src/llm/abort.utils.js';
 import { LlmCallRecorder } from '../src/llm/llm-call.recorder.js';
 import { LLM_OPTIONS, LLM_PROVIDER, type LlmOptions } from '../src/llm/llm.service.js';
-import type { LlmMessage, LlmProvider, LlmRequestOptions } from '../src/llm/llm.types.js';
+import type {
+  LlmChatResult,
+  LlmMessage,
+  LlmProvider,
+  LlmRequestOptions,
+} from '../src/llm/llm.types.js';
 import { MOCK_ERROR_TRIGGER, MockLlmProvider } from '../src/llm/providers/mock.provider.js';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestUser, loginAs } from './helpers/auth.js';
@@ -22,12 +27,15 @@ class RecordingProvider implements LlmProvider {
   tokenDelayMs = 0;
   private readonly mock = new MockLlmProvider({ tokenDelayMs: { min: 0, max: 0 } });
 
-  chat(messages: LlmMessage[], options: LlmRequestOptions): Promise<string> {
+  chat(messages: LlmMessage[], options: LlmRequestOptions): Promise<LlmChatResult> {
     this.calls.push(messages);
     return this.mock.chat(messages, options);
   }
 
-  async *chatStream(messages: LlmMessage[], options: LlmRequestOptions): AsyncIterable<string> {
+  async *chatStream(
+    messages: LlmMessage[],
+    options: LlmRequestOptions,
+  ): AsyncGenerator<string, undefined> {
     this.calls.push(messages);
     for await (const token of this.mock.chatStream(messages, options)) {
       await sleep(this.tokenDelayMs, options.signal);
