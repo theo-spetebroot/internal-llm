@@ -4,7 +4,8 @@ import { LlmCallOutcome } from '../generated/prisma/enums.js';
 import { raceAbort } from './abort.utils.js';
 import { isNetworkError, LlmError } from './llm.errors.js';
 import { LlmCallRecorder } from './llm-call.recorder.js';
-import type { LlmMessage, LlmProvider } from './llm.types.js';
+import type { LlmMessage, LlmProvider, LlmUsage, TokenUsage } from './llm.types.js';
+import { estimateMessagesTokens, estimateTokens } from './token-estimator.js';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
 export const LLM_OPTIONS = Symbol('LLM_OPTIONS');
@@ -48,18 +49,40 @@ export class LlmService {
   }
 
   /**
+   * Token usage of a call that did not complete, estimated from the text received so far.
+   * `history` is what `generate` received: the system prompt is added here, as it is there.
+   */
+  estimateUsage(history: LlmMessage[], answer: string): TokenUsage {
+    return this.estimate(this.withSystemPrompt(history), answer);
+  }
+
+  /** `messages` is what the provider receives, system prompt included. */
+  private estimate(messages: LlmMessage[], answer: string): TokenUsage {
+    return {
+      promptTokens: estimateMessagesTokens(messages),
+      completionTokens: estimateTokens(answer),
+      estimated: true,
+    };
+  }
+
+  /**
    * Yields the answer as text deltas: many small ones when streaming, a single one otherwise.
    * Callers handle both modes identically. Throws `LlmError` on failure.
    * Exactly one call record is written when the call ends, whatever the outcome.
+   *
+   * Once the answer is complete, the generator returns its token usage: the provider's own
+   * figures when it reports them, an estimate (flagged as such) otherwise.
    */
   async *generate(
     history: LlmMessage[],
     clientSignal: AbortSignal,
     context: LlmCallContext,
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<string, TokenUsage> {
     const messages = this.withSystemPrompt(history);
     const startedAt = new Date();
     const startedClock = performance.now();
+    let answer = '';
+    let reportedUsage: LlmUsage | undefined;
     let timeToFirstTokenMs: number | null = null;
     // Stays null when the consumer stops iterating early: recorded as interrupted.
     let outcome: LlmCallOutcome | null = null;
@@ -90,9 +113,13 @@ export class LlmService {
         try {
           for (;;) {
             const result = await raceAbort(iterator.next(), controller.signal);
-            if (result.done) break;
+            if (result.done) {
+              reportedUsage = result.value;
+              break;
+            }
             armTimeout();
             markFirstToken();
+            answer += result.value;
             yield result.value;
           }
         } finally {
@@ -100,14 +127,19 @@ export class LlmService {
           void iterator.return(undefined);
         }
       } else {
-        const { text } = await raceAbort(
+        const { text, usage } = await raceAbort(
           this.provider.chat(messages, { signal: controller.signal }),
           controller.signal,
         );
         markFirstToken();
+        answer = text;
+        reportedUsage = usage;
         yield text;
       }
       outcome = LlmCallOutcome.COMPLETED;
+      return reportedUsage
+        ? { ...reportedUsage, estimated: false }
+        : this.estimate(messages, answer);
     } catch (error) {
       const failure = this.normalizeError(error, clientSignal, controller.signal);
       const classified = this.classify(failure);

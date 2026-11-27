@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CHARS_PER_TOKEN, estimateTokens } from './token-estimator.js';
+import { CHARS_PER_TOKEN, estimateMessagesTokens, estimateTokens } from './token-estimator.js';
 
 describe('estimateTokens', () => {
   it('counts nothing for an empty text', () => {
@@ -22,6 +22,18 @@ describe('estimateTokens', () => {
   it('grows with the length of the text', () => {
     expect(estimateTokens('hello world, this is a longer sentence')).toBeGreaterThan(
       estimateTokens('hello world'),
+    );
+  });
+});
+
+describe('estimateMessagesTokens', () => {
+  it('counts nothing without messages', () => {
+    expect(estimateMessagesTokens([])).toBe(0);
+  });
+
+  it('sums the estimate of each message', () => {
+    expect(estimateMessagesTokens([{ content: 'a'.repeat(8) }, { content: 'a'.repeat(5) }])).toBe(
+      2 + 2,
     );
   });
 });

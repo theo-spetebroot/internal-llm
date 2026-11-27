@@ -9,3 +9,8 @@ export const CHARS_PER_TOKEN = 4;
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
+
+/** Estimates how many tokens a list of messages takes, summing their contents. */
+export function estimateMessagesTokens(messages: readonly { content: string }[]): number {
+  return messages.reduce((total, message) => total + estimateTokens(message.content), 0);
+}

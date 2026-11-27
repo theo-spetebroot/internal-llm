@@ -4,7 +4,13 @@ import { LlmCallOutcome } from '../generated/prisma/enums.js';
 import { LlmError, type LlmErrorCode } from './llm.errors.js';
 import { type LlmCallContext, type LlmOptions, LlmService } from './llm.service.js';
 import type { LlmCallRecorder, LlmCallRecord } from './llm-call.recorder.js';
-import type { LlmMessage, LlmProvider, LlmRequestOptions } from './llm.types.js';
+import type {
+  LlmMessage,
+  LlmProvider,
+  LlmRequestOptions,
+  LlmUsage,
+  TokenUsage,
+} from './llm.types.js';
 
 const history: LlmMessage[] = [{ role: 'user', content: 'Hi' }];
 const defaults: LlmOptions = { stream: true, timeoutMs: 1_000 };
@@ -18,22 +24,26 @@ interface FakeProvider extends LlmProvider {
   calls: { method: 'chat' | 'chatStream'; messages: LlmMessage[] }[];
 }
 
-/** Provider streaming `tokens` with `delayMs` between them (and the same text via chat()). */
-function fakeProvider(tokens: string[], delayMs = 0): FakeProvider {
+/**
+ * Provider streaming `tokens` with `delayMs` between them (and the same text via chat()).
+ * Reports `usage` in both modes when given, like a provider that knows the real figures.
+ */
+function fakeProvider(tokens: string[], delayMs = 0, usage?: LlmUsage): FakeProvider {
   const calls: FakeProvider['calls'] = [];
   return {
     name: 'fake',
     calls,
     chat(messages) {
       calls.push({ method: 'chat', messages });
-      return Promise.resolve({ text: tokens.join('') });
+      return Promise.resolve({ text: tokens.join(''), usage });
     },
-    async *chatStream(messages): AsyncGenerator<string, undefined> {
+    async *chatStream(messages): AsyncGenerator<string, LlmUsage | undefined> {
       calls.push({ method: 'chatStream', messages });
       for (const token of tokens) {
         await wait(delayMs);
         yield token;
       }
+      return usage;
     },
   };
 }
@@ -58,6 +68,21 @@ async function collect(
   const deltas: string[] = [];
   for await (const delta of service.generate(history, signal, context)) deltas.push(delta);
   return deltas;
+}
+
+/** Consumes a whole call, returning the deltas and the usage the generator hands back. */
+async function generateAll(
+  service: LlmService,
+  input: LlmMessage[] = history,
+): Promise<{ deltas: string[]; usage: TokenUsage }> {
+  const deltas: string[] = [];
+  const generator = service.generate(input, new AbortController().signal, context);
+  let step = await generator.next();
+  while (!step.done) {
+    deltas.push(step.value);
+    step = await generator.next();
+  }
+  return { deltas, usage: step.value };
 }
 
 async function expectLlmError(promise: Promise<unknown>, code: LlmErrorCode): Promise<void> {
@@ -109,6 +134,64 @@ describe('LlmService', () => {
       const provider = fakeProvider(['ok']);
       await collect(newService(provider));
       expect(provider.calls[0]?.messages).toEqual(history);
+    });
+  });
+
+  describe('token usage', () => {
+    // 'Hi' is 1 token; 'Hello world!' (12 characters) is 3.
+    const answer = ['Hello', ' world', '!'];
+    const reported: LlmUsage = { promptTokens: 42, completionTokens: 7 };
+
+    it('is estimated, and flagged as such, when the provider reports none (streaming)', async () => {
+      const { usage } = await generateAll(newService(fakeProvider(answer)));
+      expect(usage).toEqual({ promptTokens: 1, completionTokens: 3, estimated: true });
+    });
+
+    it('is estimated, and flagged as such, when the provider reports none (one-shot)', async () => {
+      const service = newService(fakeProvider(answer), { ...defaults, stream: false });
+      const { usage } = await generateAll(service);
+      expect(usage).toEqual({ promptTokens: 1, completionTokens: 3, estimated: true });
+    });
+
+    it('counts the system prompt and the whole history in the estimated prompt tokens', async () => {
+      const service = newService(fakeProvider(answer), {
+        ...defaults,
+        systemPrompt: 'a'.repeat(8),
+      });
+      const { usage } = await generateAll(service, [
+        { role: 'user', content: 'a'.repeat(4) },
+        { role: 'assistant', content: 'a'.repeat(4) },
+        { role: 'user', content: 'a'.repeat(5) },
+      ]);
+      expect(usage.promptTokens).toBe(2 + 1 + 1 + 2);
+    });
+
+    it('prefers the figures reported by the provider (streaming)', async () => {
+      const { usage } = await generateAll(newService(fakeProvider(answer, 0, reported)));
+      expect(usage).toEqual({ ...reported, estimated: false });
+    });
+
+    it('prefers the figures reported by the provider (one-shot)', async () => {
+      const service = newService(fakeProvider(answer, 0, reported), { ...defaults, stream: false });
+      const { usage } = await generateAll(service);
+      expect(usage).toEqual({ ...reported, estimated: false });
+    });
+
+    it('does not change the streamed text', async () => {
+      const { deltas } = await generateAll(newService(fakeProvider(answer, 0, reported)));
+      expect(deltas).toEqual(answer);
+    });
+
+    it('estimates the usage of a partial answer, system prompt included', () => {
+      const service = newService(fakeProvider(answer), {
+        ...defaults,
+        systemPrompt: 'a'.repeat(8),
+      });
+      expect(service.estimateUsage(history, 'a'.repeat(9))).toEqual({
+        promptTokens: 2 + 1,
+        completionTokens: 3,
+        estimated: true,
+      });
     });
   });
 

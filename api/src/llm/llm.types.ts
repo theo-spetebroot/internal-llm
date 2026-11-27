@@ -15,6 +15,12 @@ export interface LlmUsage {
   completionTokens: number;
 }
 
+/** Token usage of a call, as `LlmService` hands it over: reported by the provider or estimated. */
+export interface TokenUsage extends LlmUsage {
+  /** False when the figures come from the provider, true when they are estimated. */
+  estimated: boolean;
+}
+
 export interface LlmChatResult {
   text: string;
   /** Only when the model server reports it; `LlmService` estimates the figures otherwise. */
