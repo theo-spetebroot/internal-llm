@@ -8,10 +8,12 @@ import { ZodSerializerInterceptor } from './common/zod/zod-serializer.intercepto
 import { validateEnv } from './config/env.schema.js';
 import { ConversationsModule } from './conversations/conversations.module.js';
 import { HealthModule } from './health/health.module.js';
+import { LoggingModule } from './logging/logging.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
 @Module({
   imports: [
+    LoggingModule,
     ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
     PrismaModule,
     AuthModule,

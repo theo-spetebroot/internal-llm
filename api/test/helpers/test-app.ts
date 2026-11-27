@@ -4,7 +4,7 @@ import type { INestApplication, Type } from '@nestjs/common';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 
 import { AppModule } from '../../src/app.module.js';
-import { configureApp } from '../../src/app.setup.js';
+import { APP_FACTORY_OPTIONS, configureApp } from '../../src/app.setup.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 
 export interface TestApp {
@@ -27,8 +27,8 @@ export async function createTestApp(
   const moduleRef = await customize(
     Test.createTestingModule({ imports: [AppModule, ...extraModules] }),
   ).compile();
-  const app = moduleRef.createNestApplication();
-  app.useLogger(false);
+  // Logs are silent in tests (see createLoggerParams) unless a test provides LOG_STREAM.
+  const app = moduleRef.createNestApplication(APP_FACTORY_OPTIONS);
   configureApp(app);
   await app.init();
 

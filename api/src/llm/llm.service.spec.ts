@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LlmCallOutcome } from '../generated/prisma/enums.js';
 import { LlmError, type LlmErrorCode } from './llm.errors.js';
@@ -90,6 +91,15 @@ async function expectLlmError(promise: Promise<unknown>, code: LlmErrorCode): Pr
   expect(error).toBeInstanceOf(LlmError);
   expect((error as LlmError).code).toBe(code);
 }
+
+beforeAll(() => {
+  // The service logs each call: keep the test output clean.
+  Logger.overrideLogger(false);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 beforeEach(() => {
   records.length = 0;
@@ -399,6 +409,68 @@ describe('LlmService', () => {
       expect(records).toHaveLength(1);
       expect(records[0]).toMatchObject({ outcome: LlmCallOutcome.INTERRUPTED, errorCode: null });
       expect(records[0]?.timeToFirstTokenMs).toEqual(expect.any(Number));
+    });
+  });
+
+  describe('logging', () => {
+    it('logs one line per completed call: outcome, provider and timings', async () => {
+      const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      await collect(newService(fakeProvider(['Hel', 'lo'])));
+
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^LLM call COMPLETED \(provider fake, \d+ ms, first token after \d+ ms\)$/,
+        ),
+      );
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('logs a failed call as a warning with its error code', async () => {
+      const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const provider: LlmProvider = {
+        name: 'broken',
+        chat: () => Promise.reject(new Error('HTTP 500')),
+      };
+
+      await expectLlmError(
+        collect(newService(provider, { ...defaults, stream: false })),
+        'LLM_ERROR',
+      );
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/^LLM call ERROR \(provider broken, \d+ ms, no token, LLM_ERROR\)$/),
+      );
+      expect(log).not.toHaveBeenCalled();
+    });
+
+    it('logs an interrupted call as an ordinary line: it is not an error', async () => {
+      const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const service = newService(fakeProvider(['a', 'b', 'c']));
+
+      for await (const _delta of service.generate(history, new AbortController().signal, context)) {
+        break;
+      }
+
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('LLM call INTERRUPTED'));
+    });
+
+    it('never logs the prompt or the answer', async () => {
+      const lines: string[] = [];
+      for (const method of ['log', 'warn', 'error', 'debug', 'verbose'] as const) {
+        vi.spyOn(Logger.prototype, method).mockImplementation((...args: unknown[]) => {
+          lines.push(JSON.stringify(args));
+        });
+      }
+      const service = newService(fakeProvider(['the', ' secret', ' answer']));
+
+      await generateAll(service, [{ role: 'user', content: 'a very private question' }]);
+
+      expect(lines.length).toBeGreaterThan(0);
+      expect(lines.join('\n')).not.toMatch(/private question|secret answer/);
     });
   });
 });

@@ -1,6 +1,14 @@
 # Nginx site configuration. Template: ${API_UPSTREAM} is replaced at container start (only
 # the variables defined in the environment are substituted, Nginx's own $variables are kept).
 
+# The id the API gets for a request: the one the caller sent in X-Request-Id, else one made by
+# Nginx. The API keeps it when it is valid, puts it in every log line of the request and returns
+# it in the X-Request-Id response header.
+map $http_x_request_id $request_id_for_api {
+    default $http_x_request_id;
+    ""      $request_id;
+}
+
 server {
     listen 8080;
     server_name _;
@@ -19,6 +27,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-Id $request_id_for_api;
     }
 
     # Streamed answers (Server-Sent Events): every chunk must reach the browser at once.
@@ -30,6 +39,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-Id $request_id_for_api;
 
         proxy_buffering off;
         proxy_cache off;
