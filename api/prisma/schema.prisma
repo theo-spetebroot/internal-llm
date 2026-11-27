@@ -71,6 +71,13 @@ model Message {
   interrupted    Boolean      @default(false)
   createdAt      DateTime     @default(now()) @map("created_at")
 
+  // Token counts of an assistant message; NULL on the other roles. `tokensEstimated` tells
+  // whether they come from a heuristic (true) or were reported by the provider (false), so
+  // real figures can replace estimates later without changing the schema.
+  promptTokens     Int?     @map("prompt_tokens")
+  completionTokens Int?     @map("completion_tokens")
+  tokensEstimated  Boolean? @map("tokens_estimated")
+
   // Serves "messages of a conversation in chronological order".
   @@index([conversationId, createdAt])
   @@map("messages")

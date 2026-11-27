@@ -13,7 +13,7 @@ import {
 import { MessageRole } from '../generated/prisma/enums.js';
 import { LlmError } from '../llm/llm.errors.js';
 import { LlmService } from '../llm/llm.service.js';
-import type { LlmMessage } from '../llm/llm.types.js';
+import type { LlmMessage, TokenUsage } from '../llm/llm.types.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CHAT_ERROR_MESSAGES, type ChatErrorCode, type ChatEvent } from './chat.schemas.js';
 import { titleFromMessage } from './conversation-title.js';
@@ -79,9 +79,10 @@ export class ChatService {
   }
 
   /**
-   * Streams the answer as `delta` events, then saves it and ends with `done`.
-   * On failure, the partial answer (if any) is saved as interrupted and an `error` event
-   * ends the stream; when the client is gone (`signal` aborted), nothing more is emitted.
+   * Streams the answer as `delta` events, then saves it with its token usage and ends with
+   * `done`. On failure, the partial answer (if any) is saved as interrupted, with an estimated
+   * usage, and an `error` event ends the stream; when the client is gone (`signal` aborted),
+   * nothing more is emitted.
    */
   async *answer(
     userId: string,
@@ -90,22 +91,39 @@ export class ChatService {
     signal: AbortSignal,
   ): AsyncGenerator<ChatEvent> {
     let content = '';
+    let usage: TokenUsage;
+    // Iterated by hand: `for await` would drop the usage the generator returns.
+    const generation = this.llm.generate(history, signal, { userId, conversationId });
     try {
-      for await (const delta of this.llm.generate(history, signal, { userId, conversationId })) {
-        content += delta;
-        yield { type: 'delta', content: delta };
+      let step = await generation.next();
+      while (!step.done) {
+        content += step.value;
+        yield { type: 'delta', content: step.value };
+        step = await generation.next();
       }
+      usage = step.value;
     } catch (error) {
       const partial =
-        content === '' ? null : await this.saveAssistantMessage(conversationId, content, true);
+        content === ''
+          ? null
+          : await this.saveAssistantMessage(
+              conversationId,
+              content,
+              true,
+              this.llm.estimateUsage(history, content),
+            );
       if (signal.aborted) return;
 
       const code = this.toErrorCode(error);
       yield { type: 'error', code, message: CHAT_ERROR_MESSAGES[code], assistantMessage: partial };
       return;
+    } finally {
+      // Like `for await`, lets the LLM call end (and be recorded) when this stream is closed
+      // early; a no-op once it has finished.
+      await generation.return(this.llm.estimateUsage(history, content));
     }
 
-    const assistantMessage = await this.saveAssistantMessage(conversationId, content, false);
+    const assistantMessage = await this.saveAssistantMessage(conversationId, content, false, usage);
     yield { type: 'done', assistantMessage };
   }
 
@@ -113,11 +131,21 @@ export class ChatService {
     conversationId: string,
     content: string,
     interrupted: boolean,
+    usage: TokenUsage,
   ): Promise<MessageDto> {
     const now = new Date();
     const [message] = await this.prisma.$transaction([
       this.prisma.message.create({
-        data: { conversationId, role: MessageRole.ASSISTANT, content, interrupted, createdAt: now },
+        data: {
+          conversationId,
+          role: MessageRole.ASSISTANT,
+          content,
+          interrupted,
+          createdAt: now,
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          tokensEstimated: usage.estimated,
+        },
         select: messageSelect,
       }),
       this.prisma.conversation.update({
