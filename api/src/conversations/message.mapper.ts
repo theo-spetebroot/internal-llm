@@ -7,6 +7,9 @@ export const messageSelect = {
   role: true,
   content: true,
   interrupted: true,
+  promptTokens: true,
+  completionTokens: true,
+  tokensEstimated: true,
   createdAt: true,
 } as const;
 
@@ -29,6 +32,9 @@ interface MessageRow {
   role: MessageRole;
   content: string;
   interrupted: boolean;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  tokensEstimated: boolean | null;
   createdAt: Date;
 }
 

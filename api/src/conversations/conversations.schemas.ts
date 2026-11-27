@@ -34,6 +34,12 @@ export const messageSchema = z
     content: z.string(),
     /** True when the answer was cut short (client gone, LLM failure mid-stream). */
     interrupted: z.boolean(),
+    /** Tokens of the prompt sent to the model; null on messages that are not model answers. */
+    promptTokens: z.number().int().nullable(),
+    /** Tokens of the answer; null on messages that are not model answers. */
+    completionTokens: z.number().int().nullable(),
+    /** True when the token counts are estimated, false when the provider reported them. */
+    tokensEstimated: z.boolean().nullable(),
     createdAt: z.date(),
   })
   .meta({ id: 'Message' });

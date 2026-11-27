@@ -16,6 +16,9 @@ const message = {
   role: 'user' as const,
   content: 'Bonjour',
   interrupted: false,
+  promptTokens: null,
+  completionTokens: null,
+  tokensEstimated: null,
   createdAt: NOW,
 };
 const conversation = {

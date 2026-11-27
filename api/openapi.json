@@ -529,6 +529,22 @@
           "interrupted": {
             "type": "boolean"
           },
+          "promptTokens": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "completionTokens": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "tokensEstimated": {
+            "nullable": true,
+            "type": "boolean"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -539,6 +555,9 @@
           "role",
           "content",
           "interrupted",
+          "promptTokens",
+          "completionTokens",
+          "tokensEstimated",
           "createdAt"
         ],
         "additionalProperties": false

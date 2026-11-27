@@ -167,12 +167,15 @@ describe('Chat (e2e)', () => {
         completionTokens: null,
         tokensEstimated: null,
       });
-      expect(assistant).toMatchObject({
+      const expected = {
         // The whole prompt sent to the model: here a single 40-character message.
         promptTokens: 10,
         completionTokens: Math.ceil(answer.length / 4),
         tokensEstimated: true,
-      });
+      };
+      expect(assistant).toMatchObject(expected);
+      // The same figures reach the client in the `done` event.
+      expect(events.at(-1)).toMatchObject({ type: 'done', assistantMessage: expected });
     });
 
     it('stores the figures reported by the provider instead of an estimate', async () => {
