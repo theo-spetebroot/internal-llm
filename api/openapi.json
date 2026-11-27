@@ -335,6 +335,64 @@
         ]
       }
     },
+    "/api/stats/me": {
+      "get": {
+        "operationId": "StatsController_me",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 30,
+              "description": "Length of the period, in days, today included",
+              "type": "integer",
+              "enum": [
+                7,
+                30,
+                90
+              ]
+            }
+          },
+          {
+            "name": "tz",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "UTC",
+              "description": "IANA time zone the days are cut in (default UTC)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's own usage over the period: LLM calls, tokens, response times and a per-day series. Tokens come from the answers still stored: deleting a conversation removes its tokens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserStats"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid `days` or `tz`"
+          },
+          "401": {
+            "description": "Missing, invalid or expired session"
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "stats"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "HealthController_check",
@@ -732,6 +790,204 @@
         "required": [
           "status",
           "database"
+        ],
+        "additionalProperties": false
+      },
+      "UserStats": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/StatsPeriod"
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "tokens": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "$ref": "#/components/schemas/StatsTokenCounts"
+              },
+              "completion": {
+                "$ref": "#/components/schemas/StatsTokenCounts"
+              }
+            },
+            "required": [
+              "prompt",
+              "completion"
+            ],
+            "additionalProperties": false
+          },
+          "averages": {
+            "type": "object",
+            "properties": {
+              "durationMs": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "timeToFirstTokenMs": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "durationMs",
+              "timeToFirstTokenMs"
+            ],
+            "additionalProperties": false
+          },
+          "outcomes": {
+            "type": "object",
+            "properties": {
+              "completed": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              },
+              "interrupted": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              },
+              "error": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              },
+              "timeout": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              }
+            },
+            "required": [
+              "completed",
+              "interrupted",
+              "error",
+              "timeout"
+            ],
+            "additionalProperties": false
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsDailyPoint"
+            }
+          }
+        },
+        "required": [
+          "period",
+          "requests",
+          "tokens",
+          "averages",
+          "outcomes",
+          "daily"
+        ],
+        "additionalProperties": false
+      },
+      "StatsPeriod": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "description": "First day of the period, YYYY-MM-DD"
+          },
+          "to": {
+            "type": "string",
+            "description": "Last day of the period (today), YYYY-MM-DD"
+          }
+        },
+        "required": [
+          "days",
+          "timeZone",
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "StatsTokenCounts": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "estimated": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Counted with a heuristic (about 4 characters per token)"
+          },
+          "reported": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Reported by the LLM provider"
+          }
+        },
+        "required": [
+          "total",
+          "estimated",
+          "reported"
+        ],
+        "additionalProperties": false
+      },
+      "StatsOutcome": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Share of the requests of the period (0 to 1)"
+          }
+        },
+        "required": [
+          "count",
+          "rate"
+        ],
+        "additionalProperties": false
+      },
+      "StatsDailyPoint": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar day, YYYY-MM-DD, in the requested time zone"
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "promptTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "completionTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "date",
+          "requests",
+          "promptTokens",
+          "completionTokens"
         ],
         "additionalProperties": false
       }

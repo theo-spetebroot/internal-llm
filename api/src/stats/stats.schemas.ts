@@ -7,25 +7,26 @@ export const STATS_PERIOD_DAYS = [7, 30, 90] as const;
 export const DEFAULT_STATS_DAYS = 30;
 export const DEFAULT_STATS_TIME_ZONE = 'UTC';
 
-/** Query of `GET /api/stats/me`. Unknown parameters are ignored. */
-export const statsQuerySchema = z
-  .object({
-    days: z.coerce
-      .number()
-      .pipe(z.literal(STATS_PERIOD_DAYS, { error: 'days must be 7, 30 or 90' }))
-      .default(DEFAULT_STATS_DAYS)
-      .meta({
-        description: 'Length of the period, in days, today included',
-        type: 'integer',
-        enum: [...STATS_PERIOD_DAYS],
-      }),
-    tz: z
-      .string()
-      .refine(isValidTimeZone, { error: 'tz must be an IANA time zone, e.g. Europe/Paris' })
-      .default(DEFAULT_STATS_TIME_ZONE)
-      .meta({ description: 'IANA time zone the days are cut in (default UTC)' }),
-  })
-  .meta({ id: 'UserStatsQuery' });
+/**
+ * Query of `GET /api/stats/me`. Unknown parameters are ignored. Deliberately has no `id`:
+ * `ZodQuery` documents each property as a query parameter, which needs them inline.
+ */
+export const statsQuerySchema = z.object({
+  days: z.coerce
+    .number()
+    .pipe(z.literal(STATS_PERIOD_DAYS, { error: 'days must be 7, 30 or 90' }))
+    .default(DEFAULT_STATS_DAYS)
+    .meta({
+      description: 'Length of the period, in days, today included',
+      type: 'integer',
+      enum: [...STATS_PERIOD_DAYS],
+    }),
+  tz: z
+    .string()
+    .refine(isValidTimeZone, { error: 'tz must be an IANA time zone, e.g. Europe/Paris' })
+    .default(DEFAULT_STATS_TIME_ZONE)
+    .meta({ description: 'IANA time zone the days are cut in (default UTC)' }),
+});
 
 export type StatsQuery = z.output<typeof statsQuerySchema>;
 
