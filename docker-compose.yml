@@ -60,6 +60,7 @@ services:
       LLM_STREAM: ${LLM_STREAM:-true}
       LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-60000}
       LLM_SYSTEM_PROMPT: ${LLM_SYSTEM_PROMPT:-}
+      LLM_CALL_RETENTION_DAYS: ${LLM_CALL_RETENTION_DAYS:-90}
 
   web:
     build: ./web

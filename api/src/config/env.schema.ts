@@ -36,6 +36,11 @@ export const envSchema = z.object({
     .trim()
     .optional()
     .transform((value) => (value === '' ? undefined : value)),
+  /**
+   * Recorded LLM calls older than this many days are deleted by the daily purge. The upper
+   * bound (10 years) only keeps the cut-off date a valid date.
+   */
+  LLM_CALL_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
 });
 
 export type Env = z.infer<typeof envSchema>;
