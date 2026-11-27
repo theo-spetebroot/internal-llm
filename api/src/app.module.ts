@@ -13,8 +13,8 @@ import { PrismaModule } from './prisma/prisma.module.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
     LoggingModule,
+    ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
     PrismaModule,
     AuthModule,
     ConversationsModule,
