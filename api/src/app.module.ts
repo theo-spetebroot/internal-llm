@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthModule } from './auth/auth.module.js';
 import { ChatModule } from './chat/chat.module.js';
@@ -15,6 +16,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
   imports: [
     LoggingModule,
     ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     ConversationsModule,

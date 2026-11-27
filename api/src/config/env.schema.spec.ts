@@ -10,6 +10,32 @@ const TEST_ONLY_VARIABLES = ['TEST_DATABASE_URL'];
 
 const example = parseEnv(readFileSync(new URL('../../.env.example', import.meta.url), 'utf8'));
 
+/** Minimal valid environment: the schema only requires these two. */
+const minimal = {
+  DATABASE_URL: 'postgresql://user:password@localhost:5432/db',
+  JWT_SECRET: 'x'.repeat(32),
+};
+
+describe('LLM_CALL_RETENTION_DAYS', () => {
+  const parse = (value?: string) =>
+    envSchema.safeParse(
+      value === undefined ? minimal : { ...minimal, LLM_CALL_RETENTION_DAYS: value },
+    );
+
+  it('defaults to 90 days', () => {
+    expect(parse().data?.LLM_CALL_RETENTION_DAYS).toBe(90);
+  });
+
+  it('reads a number of days, given as a string like any environment variable', () => {
+    expect(parse('30').data?.LLM_CALL_RETENTION_DAYS).toBe(30);
+    expect(parse('1').data?.LLM_CALL_RETENTION_DAYS).toBe(1);
+  });
+
+  it.each(['0', '-1', '1.5', 'abc', '', '3651'])('refuses %j', (value) => {
+    expect(parse(value).success).toBe(false);
+  });
+});
+
 describe('api/.env.example', () => {
   it('lists exactly the variables of the env schema, plus the test-only ones', () => {
     expect(Object.keys(example).sort()).toEqual(

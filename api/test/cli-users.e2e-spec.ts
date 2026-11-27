@@ -1,45 +1,13 @@
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createPrismaClient } from '../src/prisma/create-prisma-client.js';
 import { createUser } from '../src/users/create-user.js';
+import { runCli } from './helpers/run-cli.js';
 import { TEST_DATABASE_URL } from './test-env.js';
 
-const API_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PASSWORD = 'correct-horse-battery-staple';
 
 const db = createPrismaClient(TEST_DATABASE_URL);
-
-interface CliResult {
-  code: number | null;
-  stdout: string;
-  stderr: string;
-}
-
-/** Runs a CLI script against the test database, answering its prompts from `stdin`. */
-function runCli(script: string, args: string[], stdin: string): Promise<CliResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['--import', 'tsx', `src/cli/${script}`, ...args], {
-      cwd: API_ROOT,
-      env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      resolve({ code, stdout, stderr });
-    });
-    child.stdin.end(stdin);
-  });
-}
 
 async function roleOf(email: string): Promise<string | undefined> {
   return (await db.user.findUnique({ where: { email } }))?.role;

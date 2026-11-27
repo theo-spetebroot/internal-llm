@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { Env } from '../config/env.schema.js';
+import { LlmCallPurgeTask } from './llm-call.purge-task.js';
 import { LlmCallRecorder } from './llm-call.recorder.js';
 import { llmProviderFactories } from './llm-provider.registry.js';
 import type { LlmProvider } from './llm.types.js';
@@ -26,6 +27,7 @@ import { LLM_OPTIONS, LLM_PROVIDER, type LlmOptions, LlmService } from './llm.se
     },
     LlmService,
     LlmCallRecorder,
+    LlmCallPurgeTask,
   ],
   exports: [LlmService],
 })
