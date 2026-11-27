@@ -144,6 +144,15 @@ The Zod schemas live in `api/src/chat/chat.schemas.ts`. The web client keeps a c
 `web/src/api/chat-events.ts` and validates every event it receives; a compile-time check fails
 as soon as that copy and the generated `ChatEvent` type diverge.
 
+### Token usage
+
+Every assistant message stores `promptTokens` and `completionTokens` (both `null` on user
+messages), with `tokensEstimated` telling where they come from. Until the model server reports
+real figures they are estimated at about four characters per token (`estimated: true`). A
+provider can report its own usage — `chat()` resolves to `{ text, usage? }` and `chatStream()`
+may return the usage when the stream ends — and `LlmService` then prefers it
+(`tokensEstimated: false`). A partial answer is always estimated.
+
 ### Roles and access
 
 Every account has a role: `USER` (the default) or `ADMIN`. Admins can reach admin-only routes

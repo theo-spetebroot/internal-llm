@@ -16,6 +16,9 @@ const messageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
   interrupted: z.boolean(),
+  promptTokens: z.number().int().nullable(),
+  completionTokens: z.number().int().nullable(),
+  tokensEstimated: z.boolean().nullable(),
   createdAt: z.iso.datetime(),
 });
 

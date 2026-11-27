@@ -78,6 +78,9 @@ export const backend = {
         role: message.role ?? 'user',
         content: message.content ?? '',
         interrupted: message.interrupted ?? false,
+        promptTokens: message.promptTokens ?? null,
+        completionTokens: message.completionTokens ?? null,
+        tokensEstimated: message.tokensEstimated ?? null,
         createdAt: message.createdAt ?? now,
       })),
     };
@@ -144,6 +147,9 @@ function saveMessage(
     role,
     content,
     interrupted,
+    promptTokens: null,
+    completionTokens: null,
+    tokensEstimated: null,
     createdAt,
   };
   conversation.messages.push(message);

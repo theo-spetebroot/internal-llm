@@ -9,6 +9,24 @@ export interface LlmRequestOptions {
   signal: AbortSignal;
 }
 
+/** Token counts reported by the model server itself (as opposed to estimated ones). */
+export interface LlmUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+/** Token usage of a call, as `LlmService` hands it over: reported by the provider or estimated. */
+export interface TokenUsage extends LlmUsage {
+  /** False when the figures come from the provider, true when they are estimated. */
+  estimated: boolean;
+}
+
+export interface LlmChatResult {
+  text: string;
+  /** Only when the model server reports it; `LlmService` estimates the figures otherwise. */
+  usage?: LlmUsage | undefined;
+}
+
 /**
  * Contract every LLM backend implements. The rest of the application only depends on this
  * interface (through `LlmService`): supporting a new API format means writing a new provider
@@ -17,9 +35,15 @@ export interface LlmRequestOptions {
 export interface LlmProvider {
   readonly name: string;
 
-  /** Returns the complete answer. */
-  chat(messages: LlmMessage[], options: LlmRequestOptions): Promise<string>;
+  /** Returns the complete answer, with the token usage when the provider knows it. */
+  chat(messages: LlmMessage[], options: LlmRequestOptions): Promise<LlmChatResult>;
 
-  /** Optional: yields the answer token by token. */
-  chatStream?(messages: LlmMessage[], options: LlmRequestOptions): AsyncIterable<string>;
+  /**
+   * Optional: yields the answer token by token. The generator's return value is the token
+   * usage, for providers that report it once the stream is over.
+   */
+  chatStream?(
+    messages: LlmMessage[],
+    options: LlmRequestOptions,
+  ): AsyncGenerator<string, LlmUsage | undefined>;
 }

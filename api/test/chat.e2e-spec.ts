@@ -8,7 +8,13 @@ import { DEFAULT_CONVERSATION_TITLE } from '../src/conversations/conversations.s
 import { sleep } from '../src/llm/abort.utils.js';
 import { LlmCallRecorder } from '../src/llm/llm-call.recorder.js';
 import { LLM_OPTIONS, LLM_PROVIDER, type LlmOptions } from '../src/llm/llm.service.js';
-import type { LlmMessage, LlmProvider, LlmRequestOptions } from '../src/llm/llm.types.js';
+import type {
+  LlmChatResult,
+  LlmMessage,
+  LlmProvider,
+  LlmRequestOptions,
+  LlmUsage,
+} from '../src/llm/llm.types.js';
 import { MOCK_ERROR_TRIGGER, MockLlmProvider } from '../src/llm/providers/mock.provider.js';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestUser, loginAs } from './helpers/auth.js';
@@ -20,19 +26,26 @@ class RecordingProvider implements LlmProvider {
   readonly name = 'recording';
   readonly calls: LlmMessage[][] = [];
   tokenDelayMs = 0;
+  /** Usage reported with every complete answer, like a provider that knows the real figures. */
+  reportedUsage: LlmUsage | undefined;
   private readonly mock = new MockLlmProvider({ tokenDelayMs: { min: 0, max: 0 } });
 
-  chat(messages: LlmMessage[], options: LlmRequestOptions): Promise<string> {
+  async chat(messages: LlmMessage[], options: LlmRequestOptions): Promise<LlmChatResult> {
     this.calls.push(messages);
-    return this.mock.chat(messages, options);
+    const { text } = await this.mock.chat(messages, options);
+    return { text, usage: this.reportedUsage };
   }
 
-  async *chatStream(messages: LlmMessage[], options: LlmRequestOptions): AsyncIterable<string> {
+  async *chatStream(
+    messages: LlmMessage[],
+    options: LlmRequestOptions,
+  ): AsyncGenerator<string, LlmUsage | undefined> {
     this.calls.push(messages);
     for await (const token of this.mock.chatStream(messages, options)) {
       await sleep(this.tokenDelayMs, options.signal);
       yield token;
     }
+    return this.reportedUsage;
   }
 }
 
@@ -65,6 +78,7 @@ describe('Chat (e2e)', () => {
     await resetDatabase(prisma);
     provider.calls.length = 0;
     provider.tokenDelayMs = 0;
+    provider.reportedUsage = undefined;
     llmOptions.stream = true;
     cookie = await loginAs(http, await createTestUser(prisma, 'Alice'));
     const response = await request(http)
@@ -137,6 +151,72 @@ describe('Chat (e2e)', () => {
       const events = await sendAndParse('Hello');
 
       expect(events.map((event) => event.type)).toEqual(['start', 'delta', 'done']);
+    });
+  });
+
+  describe('token usage', () => {
+    it('stores estimated token counts on the assistant message only', async () => {
+      const events = await sendAndParse('a'.repeat(40));
+      const answer = eventsOfType(events, 'delta')
+        .map((delta) => delta.content)
+        .join('');
+
+      const [user, assistant] = await storedMessages();
+      expect(user).toMatchObject({
+        promptTokens: null,
+        completionTokens: null,
+        tokensEstimated: null,
+      });
+      const expected = {
+        // The whole prompt sent to the model: here a single 40-character message.
+        promptTokens: 10,
+        completionTokens: Math.ceil(answer.length / 4),
+        tokensEstimated: true,
+      };
+      expect(assistant).toMatchObject(expected);
+      // The same figures reach the client in the `done` event.
+      expect(events.at(-1)).toMatchObject({ type: 'done', assistantMessage: expected });
+    });
+
+    it('stores the figures reported by the provider instead of an estimate', async () => {
+      provider.reportedUsage = { promptTokens: 123, completionTokens: 45 };
+      await sendAndParse('Hello');
+
+      const assistant = (await storedMessages())[1];
+      expect(assistant).toMatchObject({
+        promptTokens: 123,
+        completionTokens: 45,
+        tokensEstimated: false,
+      });
+    });
+
+    it('stores the reported figures when streaming is disabled', async () => {
+      llmOptions.stream = false;
+      provider.reportedUsage = { promptTokens: 7, completionTokens: 8 };
+      await sendAndParse('Hello');
+
+      expect((await storedMessages())[1]).toMatchObject({
+        promptTokens: 7,
+        completionTokens: 8,
+        tokensEstimated: false,
+      });
+    });
+
+    it('estimates the usage of a partial answer', async () => {
+      // Whatever the provider reports, an answer cut short never completed its report.
+      provider.reportedUsage = { promptTokens: 999, completionTokens: 999 };
+      const events = await sendAndParse(`Break ${MOCK_ERROR_TRIGGER}`);
+      const partial = eventsOfType(events, 'delta')
+        .map((delta) => delta.content)
+        .join('');
+
+      const assistant = (await storedMessages())[1];
+      expect(assistant).toMatchObject({
+        interrupted: true,
+        completionTokens: Math.ceil(partial.length / 4),
+        tokensEstimated: true,
+      });
+      expect(assistant?.promptTokens).toBe(Math.ceil(`Break ${MOCK_ERROR_TRIGGER}`.length / 4));
     });
   });
 

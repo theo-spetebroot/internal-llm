@@ -196,6 +196,9 @@ describe('sending a message', () => {
       role: 'user',
       content: 'Enregistré côté serveur',
       interrupted: false,
+      promptTokens: null,
+      completionTokens: null,
+      tokensEstimated: null,
       createdAt: new Date().toISOString(),
     });
 

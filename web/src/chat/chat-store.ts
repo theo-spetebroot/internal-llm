@@ -161,6 +161,10 @@ export class ChatStore {
           role: 'assistant',
           content: answer,
           interrupted: true,
+          // Unknown until the API has saved the answer and the conversation is reloaded.
+          promptTokens: null,
+          completionTokens: null,
+          tokensEstimated: null,
           createdAt: new Date().toISOString(),
         }
       : null;

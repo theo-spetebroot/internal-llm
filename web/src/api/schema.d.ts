@@ -163,6 +163,9 @@ export interface components {
             role: components["schemas"]["MessageRole"];
             content: string;
             interrupted: boolean;
+            promptTokens: number | null;
+            completionTokens: number | null;
+            tokensEstimated: boolean | null;
             /** Format: date-time */
             createdAt: string;
         };
