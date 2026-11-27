@@ -38,6 +38,7 @@ describe('LLM call records on shutdown (e2e)', () => {
       timeToFirstTokenMs: null,
       outcome: LlmCallOutcome.COMPLETED,
       errorCode: null,
+      usage: null,
     });
 
     const closing = testApp.close();

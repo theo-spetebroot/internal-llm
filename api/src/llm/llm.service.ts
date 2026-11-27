@@ -68,6 +68,26 @@ export class LlmService {
   }
 
   /**
+   * Token usage recorded for a call that did not complete:
+   * - some text came back: estimated from the prompt and that text;
+   * - nothing came back, but the model server was reached and then failed or timed out: it
+   *   received and processed the prompt, so the prompt is counted and the answer is empty;
+   * - otherwise there is no figure (`null`): the server was never reached (`LLM_UNAVAILABLE`),
+   *   or the caller left before any token.
+   */
+  private usageOfUnfinishedCall(
+    messages: LlmMessage[],
+    answer: string,
+    errorCode: string | null,
+  ): TokenUsage | null {
+    if (answer !== '') return this.estimate(messages, answer);
+    if (errorCode === 'LLM_ERROR' || errorCode === 'LLM_TIMEOUT') {
+      return this.estimate(messages, '');
+    }
+    return null;
+  }
+
+  /**
    * Yields the answer as text deltas: many small ones when streaming, a single one otherwise.
    * Callers handle both modes identically. Throws `LlmError` on failure.
    * Exactly one call record is written when the call ends, whatever the outcome.
@@ -85,6 +105,8 @@ export class LlmService {
     const startedClock = performance.now();
     let answer = '';
     let reportedUsage: LlmUsage | undefined;
+    // Only set once the call has completed.
+    let completedUsage: TokenUsage | null = null;
     let timeToFirstTokenMs: number | null = null;
     // Stays null when the consumer stops iterating early: recorded as interrupted.
     let outcome: LlmCallOutcome | null = null;
@@ -139,9 +161,10 @@ export class LlmService {
         yield text;
       }
       outcome = LlmCallOutcome.COMPLETED;
-      return reportedUsage
+      completedUsage = reportedUsage
         ? { ...reportedUsage, estimated: false }
         : this.estimate(messages, answer);
+      return completedUsage;
     } catch (error) {
       const failure = this.normalizeError(error, clientSignal, controller.signal);
       const classified = this.classify(failure);
@@ -151,7 +174,7 @@ export class LlmService {
     } finally {
       clearTimeout(timer);
       clientSignal.removeEventListener('abort', forwardAbort);
-      const call = {
+      const call: LlmCallRecord = {
         userId: context.userId,
         conversationId: context.conversationId,
         provider: this.provider.name,
@@ -160,6 +183,7 @@ export class LlmService {
         timeToFirstTokenMs,
         outcome: outcome ?? LlmCallOutcome.INTERRUPTED,
         errorCode,
+        usage: completedUsage ?? this.usageOfUnfinishedCall(messages, answer, errorCode),
       };
       this.recorder.record(call);
       this.logCall(call);

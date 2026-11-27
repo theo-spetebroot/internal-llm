@@ -13,6 +13,7 @@ const record: LlmCallRecord = {
   timeToFirstTokenMs: 180,
   outcome: LlmCallOutcome.COMPLETED,
   errorCode: null,
+  usage: { promptTokens: 40, completionTokens: 12, estimated: true },
 };
 
 function fakePrisma(create: (args: unknown) => Promise<unknown>): PrismaService {
@@ -37,7 +38,45 @@ describe('LlmCallRecorder', () => {
         timeToFirstTokenMs: 180,
         outcome: 'COMPLETED',
         errorCode: null,
+        promptTokens: 40,
+        completionTokens: 12,
+        tokensEstimated: true,
       },
+    });
+  });
+
+  it('stores the token usage reported by the provider as not estimated', async () => {
+    const create = vi.fn<(args: unknown) => Promise<unknown>>(() => Promise.resolve({}));
+    const recorder = new LlmCallRecorder(fakePrisma(create));
+
+    recorder.record({
+      ...record,
+      usage: { promptTokens: 7, completionTokens: 3, estimated: false },
+    });
+    await recorder.flush();
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        promptTokens: 7,
+        completionTokens: 3,
+        tokensEstimated: false,
+      }) as unknown,
+    });
+  });
+
+  it('stores no token figure when the call has none', async () => {
+    const create = vi.fn<(args: unknown) => Promise<unknown>>(() => Promise.resolve({}));
+    const recorder = new LlmCallRecorder(fakePrisma(create));
+
+    recorder.record({ ...record, usage: null });
+    await recorder.flush();
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        promptTokens: null,
+        completionTokens: null,
+        tokensEstimated: null,
+      }) as unknown,
     });
   });
 
