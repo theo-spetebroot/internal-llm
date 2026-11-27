@@ -18,7 +18,6 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
   let prisma: PrismaService;
   let stats: StatsService;
   let userId: string;
-  let conversationId: string;
 
   beforeAll(async () => {
     testApp = await createTestApp();
@@ -33,22 +32,24 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
   beforeEach(async () => {
     await resetDatabase(prisma);
     userId = (await createTestUser(prisma, 'Alice')).user.id;
-    conversationId = await addConversation(userId);
   });
 
-  function addConversation(owner: string): Promise<string> {
-    return prisma.conversation
-      .create({ data: { userId: owner, title: 'Test' } })
-      .then((conversation) => conversation.id);
+  function addConversation() {
+    return prisma.conversation.create({ data: { userId, title: 'Test' } });
   }
 
+  /** A recorded call. By default it has no token figure; pass them to record some. */
   function addCall(
     startedAt: string,
     fields: Partial<{
       userId: string;
+      conversationId: string | null;
       durationMs: number;
       timeToFirstTokenMs: number | null;
       outcome: LlmCallOutcome;
+      promptTokens: number | null;
+      completionTokens: number | null;
+      tokensEstimated: boolean | null;
     }> = {},
   ) {
     return prisma.llmCall.create({
@@ -64,28 +65,15 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
     });
   }
 
-  function addMessage(
-    createdAt: string,
-    fields: Partial<{
-      conversationId: string;
-      role: MessageRole;
-      promptTokens: number | null;
-      completionTokens: number | null;
-      tokensEstimated: boolean | null;
-    }> = {},
+  /** A call that has token figures. */
+  function addCallWithTokens(
+    startedAt: string,
+    promptTokens: number,
+    completionTokens: number,
+    tokensEstimated = true,
+    fields: Parameters<typeof addCall>[1] = {},
   ) {
-    return prisma.message.create({
-      data: {
-        conversationId,
-        role: MessageRole.ASSISTANT,
-        content: 'answer',
-        createdAt: new Date(createdAt),
-        promptTokens: 10,
-        completionTokens: 5,
-        tokensEstimated: true,
-        ...fields,
-      },
-    });
+    return addCall(startedAt, { promptTokens, completionTokens, tokensEstimated, ...fields });
   }
 
   describe('a user without data', () => {
@@ -162,17 +150,9 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
   });
 
   describe('tokens', () => {
-    it('sums the tokens of the assistant messages and tells estimated from reported', async () => {
-      await addMessage('2026-11-26T10:00:00Z', {
-        promptTokens: 10,
-        completionTokens: 4,
-        tokensEstimated: true,
-      });
-      await addMessage('2026-11-27T10:00:00Z', {
-        promptTokens: 30,
-        completionTokens: 6,
-        tokensEstimated: false,
-      });
+    it('sums the tokens of the calls and tells estimated from reported', async () => {
+      await addCallWithTokens('2026-11-26T10:00:00Z', 10, 4, true);
+      await addCallWithTokens('2026-11-27T10:00:00Z', 30, 6, false);
 
       const result = await stats.getUserStats(userId, utc(), NOW);
 
@@ -184,18 +164,58 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
       expect(result.daily.at(-1)).toMatchObject({ promptTokens: 30, completionTokens: 6 });
     });
 
-    it('ignores messages without token counts and messages that are not answers', async () => {
-      await addMessage('2026-11-27T10:00:00Z', {
-        role: MessageRole.USER,
-        promptTokens: 999,
-        completionTokens: 999,
-        tokensEstimated: null,
-      });
-      // An answer saved before token counts existed.
-      await addMessage('2026-11-27T10:00:00Z', {
+    it('counts a call without token figures as a request that adds no token', async () => {
+      // Never reached the server, left before any token, or recorded before the token columns.
+      await addCall('2026-11-27T10:00:00Z', { outcome: LlmCallOutcome.ERROR });
+      await addCall('2026-11-27T11:00:00Z', {
         promptTokens: null,
         completionTokens: null,
         tokensEstimated: null,
+      });
+      await addCallWithTokens('2026-11-27T12:00:00Z', 5, 2);
+
+      const result = await stats.getUserStats(userId, utc(), NOW);
+
+      expect(result.requests).toBe(3);
+      expect(result.tokens.prompt.total).toBe(5);
+      expect(result.tokens.completion.total).toBe(2);
+    });
+
+    it('counts the prompt of a call that failed before any token, with no answer', async () => {
+      await addCallWithTokens('2026-11-27T10:00:00Z', 12, 0, true, {
+        outcome: LlmCallOutcome.ERROR,
+      });
+
+      const result = await stats.getUserStats(userId, utc(), NOW);
+
+      expect(result.tokens.prompt).toEqual({ total: 12, estimated: 12, reported: 0 });
+      expect(result.tokens.completion.total).toBe(0);
+    });
+
+    it('adds up the tokens of the calls of every conversation, and of calls without one', async () => {
+      const first = await addConversation();
+      const second = await addConversation();
+      await addCallWithTokens('2026-11-27T10:00:00Z', 10, 1, true, { conversationId: first.id });
+      await addCallWithTokens('2026-11-27T11:00:00Z', 20, 1, true, { conversationId: second.id });
+      await addCallWithTokens('2026-11-27T11:30:00Z', 5, 1, true, { conversationId: null });
+
+      const result = await stats.getUserStats(userId, utc(), NOW);
+
+      expect(result.tokens.prompt.total).toBe(35);
+    });
+
+    it('ignores the tokens stored on the messages: only the calls count', async () => {
+      const conversation = await addConversation();
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          role: MessageRole.ASSISTANT,
+          content: 'answer',
+          createdAt: new Date('2026-11-27T10:00:00Z'),
+          promptTokens: 999,
+          completionTokens: 999,
+          tokensEstimated: true,
+        },
       });
 
       const result = await stats.getUserStats(userId, utc(), NOW);
@@ -203,26 +223,43 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
       expect(result.tokens.prompt.total).toBe(0);
       expect(result.tokens.completion.total).toBe(0);
     });
+  });
 
-    it('adds up the tokens of every conversation of the user', async () => {
-      await addMessage('2026-11-27T10:00:00Z', { promptTokens: 10 });
-      await addMessage('2026-11-27T11:00:00Z', {
-        conversationId: await addConversation(userId),
-        promptTokens: 20,
+  describe('deleting a conversation', () => {
+    it('changes neither the requests nor the tokens', async () => {
+      const kept = await addConversation();
+      const deleted = await addConversation();
+      await addCallWithTokens('2026-11-26T10:00:00Z', 10, 4, true, { conversationId: kept.id });
+      await addCallWithTokens('2026-11-27T10:00:00Z', 30, 6, false, {
+        conversationId: deleted.id,
+        durationMs: 300,
+      });
+      await prisma.message.create({
+        data: {
+          conversationId: deleted.id,
+          role: MessageRole.ASSISTANT,
+          content: 'answer',
+          promptTokens: 30,
+          completionTokens: 6,
+          tokensEstimated: false,
+        },
       });
 
-      const result = await stats.getUserStats(userId, utc(), NOW);
+      const before = await stats.getUserStats(userId, utc(), NOW);
+      await prisma.conversation.delete({ where: { id: deleted.id } });
+      const after = await stats.getUserStats(userId, utc(), NOW);
 
-      expect(result.tokens.prompt.total).toBe(30);
+      expect(await prisma.message.count({ where: { conversationId: deleted.id } })).toBe(0);
+      expect(before.requests).toBe(2);
+      expect(before.tokens.prompt.total).toBe(40);
+      expect(after).toEqual(before);
     });
   });
 
   describe('period', () => {
     it('keeps the first day of the period and drops the day before', async () => {
-      await addCall('2026-11-20T23:59:59Z');
-      await addCall('2026-11-21T00:00:00Z');
-      await addMessage('2026-11-20T23:59:59Z', { promptTokens: 1000 });
-      await addMessage('2026-11-21T00:00:00Z', { promptTokens: 1 });
+      await addCallWithTokens('2026-11-20T23:59:59Z', 1000, 0);
+      await addCallWithTokens('2026-11-21T00:00:00Z', 1, 0);
 
       const result = await stats.getUserStats(userId, utc(7), NOW);
 
@@ -255,7 +292,7 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
     });
 
     it('cuts the tokens by local day too', async () => {
-      await addMessage('2026-11-26T23:30:00Z', { promptTokens: 7 });
+      await addCallWithTokens('2026-11-26T23:30:00Z', 7, 0);
 
       const inParis = await stats.getUserStats(userId, paris(7), NOW);
 
@@ -300,14 +337,11 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
   describe('isolation', () => {
     it("never counts another user's calls or tokens", async () => {
       const bob = (await createTestUser(prisma, 'Bob')).user.id;
-      const bobConversation = await addConversation(bob);
-      await addCall('2026-11-27T10:00:00Z', { userId: bob, durationMs: 5_000 });
-      await addMessage('2026-11-27T10:00:00Z', {
-        conversationId: bobConversation,
-        promptTokens: 12_345,
+      await addCallWithTokens('2026-11-27T10:00:00Z', 12_345, 100, true, {
+        userId: bob,
+        durationMs: 5_000,
       });
-      await addCall('2026-11-27T11:00:00Z');
-      await addMessage('2026-11-27T11:00:00Z', { promptTokens: 7 });
+      await addCallWithTokens('2026-11-27T11:00:00Z', 7, 1);
 
       const alice = await stats.getUserStats(userId, utc(), NOW);
       const other = await stats.getUserStats(bob, utc(), NOW);

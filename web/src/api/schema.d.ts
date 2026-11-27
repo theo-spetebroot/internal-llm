@@ -611,7 +611,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's own usage over the period: LLM calls, tokens, response times and a per-day series. Tokens come from the answers still stored: deleting a conversation removes its tokens. */
+            /** @description The caller's own usage over the period: LLM calls, tokens, response times and a per-day series, all taken from the recorded LLM calls, so deleting a conversation changes none of them. A call without a token figure (the model server was never reached, the caller left before any token, or the call predates the token columns) counts as a request and adds no token. */
             200: {
                 headers: {
                     [name: string]: unknown;

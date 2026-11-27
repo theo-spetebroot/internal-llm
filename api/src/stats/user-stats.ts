@@ -12,11 +12,7 @@ export interface CallDayRow {
   interrupted: number;
   error: number;
   timeout: number;
-}
-
-/** Tokens of the assistant messages of one local day, split by origin. */
-export interface TokenDayRow {
-  day: string;
+  /** Tokens of the calls that have a figure, split by origin. */
   promptEstimated: number;
   promptReported: number;
   completionEstimated: number;
@@ -28,7 +24,6 @@ interface UserStatsInput {
   /** Every day of the period, oldest first. */
   days: string[];
   calls: CallDayRow[];
-  tokens: TokenDayRow[];
 }
 
 const RATE_PRECISION = 10_000;
@@ -45,21 +40,17 @@ function average(total: number, count: number): number | null {
  * Turns the per-day rows into the response: one daily point per day of the period (zeros when
  * nothing happened) and the totals of those same days. Rows outside the period are ignored.
  */
-export function buildUserStats({ query, days, calls, tokens }: UserStatsInput): UserStatsDto {
+export function buildUserStats({ query, days, calls }: UserStatsInput): UserStatsDto {
   const callsByDay = new Map(calls.map((row) => [row.day, row]));
-  const tokensByDay = new Map(tokens.map((row) => [row.day, row]));
-
   const callRows = days.flatMap((day) => callsByDay.get(day) ?? []);
-  const tokenRows = days.flatMap((day) => tokensByDay.get(day) ?? []);
 
   const daily: StatsDailyPointDto[] = days.map((date) => {
     const call = callsByDay.get(date);
-    const token = tokensByDay.get(date);
     return {
       date,
       requests: call?.requests ?? 0,
-      promptTokens: (token?.promptEstimated ?? 0) + (token?.promptReported ?? 0),
-      completionTokens: (token?.completionEstimated ?? 0) + (token?.completionReported ?? 0),
+      promptTokens: (call?.promptEstimated ?? 0) + (call?.promptReported ?? 0),
+      completionTokens: (call?.completionEstimated ?? 0) + (call?.completionReported ?? 0),
     };
   });
 
@@ -84,12 +75,12 @@ export function buildUserStats({ query, days, calls, tokens }: UserStatsInput): 
     requests,
     tokens: {
       prompt: tokenCounts(
-        sum(tokenRows, (row) => row.promptEstimated),
-        sum(tokenRows, (row) => row.promptReported),
+        sum(callRows, (row) => row.promptEstimated),
+        sum(callRows, (row) => row.promptReported),
       ),
       completion: tokenCounts(
-        sum(tokenRows, (row) => row.completionEstimated),
-        sum(tokenRows, (row) => row.completionReported),
+        sum(callRows, (row) => row.completionEstimated),
+        sum(callRows, (row) => row.completionReported),
       ),
     },
     averages: {
