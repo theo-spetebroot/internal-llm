@@ -23,6 +23,7 @@
     "db:deploy": "prisma migrate deploy",
     "user:create": "tsx src/cli/create-user.ts",
     "user:promote": "tsx src/cli/promote-user.ts",
+    "llm-calls:purge": "tsx src/cli/purge-llm-calls.ts",
     "postinstall": "prisma generate",
     "openapi:export": "nest build && node dist/openapi/export-openapi.js"
   },
