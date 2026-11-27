@@ -2,8 +2,9 @@ import type { Server } from 'node:http';
 
 import { PinoLogger } from 'nestjs-pino';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LlmCallRecorder } from '../src/llm/llm-call.recorder.js';
 import { LLM_OPTIONS, LLM_PROVIDER, type LlmOptions } from '../src/llm/llm.service.js';
 import { MockLlmProvider } from '../src/llm/providers/mock.provider.js';
 import { REDACTED } from '../src/logging/logger.config.js';
@@ -39,6 +40,10 @@ describe('Logging (e2e)', () => {
 
   afterAll(async () => {
     await testApp.close();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   beforeEach(async () => {
@@ -189,6 +194,84 @@ describe('Logging (e2e)', () => {
       await eventually(() => capture.records.find((record) => record.level === 'warn'));
 
       expect(capture.text).not.toContain('/api/health');
+    });
+  });
+
+  describe('lines written while answering a message', () => {
+    /** Sends a message to a new conversation and returns the response. */
+    async function sendMessage(content: string) {
+      const conversation = await request(http)
+        .post('/api/conversations')
+        .set('Cookie', cookie)
+        .send({})
+        .expect(201);
+      const id = (conversation.body as { id: string }).id;
+      return request(http)
+        .post(`/api/conversations/${id}/messages`)
+        .set('Cookie', cookie)
+        .send({ content })
+        .expect(200);
+    }
+
+    const linesOf = (context: string) =>
+      capture.records.filter((record) => record.context === context);
+
+    it('carry the request id of the message request: LlmService and the request line', async () => {
+      const response = await sendMessage('Hello');
+      const requestId = idOf(response);
+      await requestLine(requestId);
+
+      const llmLines = linesOf('LlmService');
+      expect(llmLines).toHaveLength(1);
+      expect(llmLines[0]).toMatchObject({
+        level: 'info',
+        requestId,
+        msg: expect.stringContaining('LLM call COMPLETED') as string,
+      });
+    });
+
+    it('carry the request id when the model fails: LlmService and ChatService', async () => {
+      const response = await sendMessage('Break [mock:error]');
+      const requestId = idOf(response);
+      await requestLine(requestId);
+
+      for (const context of ['LlmService', 'ChatService']) {
+        const lines = linesOf(context);
+        expect(lines.length, `no line from ${context}`).toBeGreaterThan(0);
+        expect(lines.every((line) => line.requestId === requestId)).toBe(true);
+        expect(lines.every((line) => line.level === 'warn')).toBe(true);
+      }
+    });
+
+    it('carry the request id when the call cannot be recorded: LlmCallRecorder', async () => {
+      vi.spyOn(prisma.llmCall, 'create').mockRejectedValueOnce(new Error('db down'));
+
+      const response = await sendMessage('Hello');
+      const requestId = idOf(response);
+      await testApp.app.get(LlmCallRecorder).flush();
+
+      const line = await eventually(() => linesOf('LlmCallRecorder')[0]);
+      expect(line).toMatchObject({
+        level: 'error',
+        requestId,
+        msg: expect.stringContaining('Could not record an LLM call') as string,
+      });
+    });
+
+    it('have different request ids for different messages', async () => {
+      const first = idOf(await sendMessage('One'));
+      const second = idOf(await sendMessage('Two'));
+      await requestLine(second);
+
+      const ids = linesOf('LlmService').map((line) => line.requestId);
+      expect(ids).toEqual([first, second]);
+    });
+
+    it('do not contain the message', async () => {
+      await sendMessage('a very private question about the merger');
+      await eventually(() => linesOf('LlmService')[0]);
+
+      expect(capture.text).not.toContain('private question');
     });
   });
 
