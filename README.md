@@ -61,10 +61,17 @@ server needed).
    ```
 
 The app is served at http://localhost:8080 (`WEB_PORT` in `.env`). There is no public sign-up:
-create the first user from the API container (interactive: email, name, hidden password):
+create the first user from the API container (interactive: email, name, administrator or not,
+hidden password):
 
 ```sh
 docker compose exec api node dist/cli/create-user.js
+```
+
+To give the admin role to an existing account (see [Roles and access](#roles-and-access)):
+
+```sh
+docker compose exec api node dist/cli/promote-user.js --email alice@example.com
 ```
 
 What runs:
@@ -137,6 +144,27 @@ The Zod schemas live in `api/src/chat/chat.schemas.ts`. The web client keeps a c
 `web/src/api/chat-events.ts` and validates every event it receives; a compile-time check fails
 as soon as that copy and the generated `ChatEvent` type diverge.
 
+### Roles and access
+
+Every account has a role: `USER` (the default) or `ADMIN`. Admins can reach admin-only routes
+(marked `@RequireAdmin()` in the API). The role is part of the user returned by
+`GET /api/auth/me`.
+
+- No session: `401`.
+- Signed in without the admin role, on an admin route: `403`. Admin routes are not another
+  user's data, so they do not use the `404` answer that hides other users' resources.
+- Roles are read from the database on every request: a promotion or demotion applies at once,
+  including to sessions already open.
+
+Admins are created or promoted from the command line only (there is no public sign-up):
+
+```sh
+npm run user:create    # interactive: asks whether the new account is an administrator
+npm run user:promote   # interactive: asks for the email of an existing account
+```
+
+Scripts can pass `--admin` to `user:create`; `user:promote` also accepts `--email`.
+
 ## Local development
 
 Prerequisites: Node 24 (see `.nvmrc`), Docker. Only PostgreSQL runs in a container; the API and
@@ -151,7 +179,8 @@ docker compose -f docker-compose.dev.yml up -d
 # api/.env.example works unchanged in local development (its JWT secret is a placeholder)
 cd api && cp .env.example .env
 npm ci && npm run db:deploy && npm run start:dev
-npm run user:create              # interactive: email, name, hidden password
+npm run user:create              # interactive: email, name, administrator?, hidden password
+npm run user:promote             # interactive: email of an account to make admin
 
 # Web — http://localhost:5173 (proxies /api to the API)
 cd web && npm ci && npm run dev

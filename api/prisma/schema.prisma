@@ -11,6 +11,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 enum MessageRole {
   USER
   ASSISTANT
@@ -29,6 +34,8 @@ model User {
   email         String         @unique
   passwordHash  String         @map("password_hash")
   displayName   String         @map("display_name")
+  // Admins see instance-wide stats and manage accounts. Promoted from the CLI only.
+  role          UserRole      @default(USER)
   createdAt     DateTime       @default(now()) @map("created_at")
   conversations Conversation[]
   llmCalls      LlmCall[]

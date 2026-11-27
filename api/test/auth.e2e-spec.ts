@@ -38,6 +38,7 @@ describe('Auth (e2e)', () => {
         id: alice.user.id,
         email: alice.email,
         displayName: 'Alice',
+        role: 'USER',
         createdAt: alice.user.createdAt.toISOString(),
       });
       expect(response.body).not.toHaveProperty('passwordHash');
@@ -94,7 +95,7 @@ describe('Auth (e2e)', () => {
 
       const response = await request(http).get('/api/auth/me').set('Cookie', cookie).expect(200);
 
-      expect(response.body).toMatchObject({ id: alice.user.id, email: alice.email });
+      expect(response.body).toMatchObject({ id: alice.user.id, email: alice.email, role: 'USER' });
     });
 
     it('returns 401 without a session cookie', async () => {

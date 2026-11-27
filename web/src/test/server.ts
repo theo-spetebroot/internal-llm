@@ -10,6 +10,7 @@ export const testUser: User = {
   id: 'user-1',
   email: 'theo@exemple.fr',
   displayName: 'Théo Martin',
+  role: 'USER',
   createdAt: '2026-11-20T10:00:00.000Z',
 };
 
