@@ -5,12 +5,12 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module.js';
-import { configureApp } from './app.setup.js';
+import { APP_FACTORY_OPTIONS, configureApp } from './app.setup.js';
 import type { Env } from './config/env.schema.js';
 import { SWAGGER_PATH, setupSwagger } from './openapi/openapi.js';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, APP_FACTORY_OPTIONS);
   configureApp(app);
   setupSwagger(app);
 
