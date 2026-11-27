@@ -190,6 +190,27 @@ npm run user:promote   # interactive: asks for the email of an existing account
 
 Scripts can pass `--admin` to `user:create`; `user:promote` also accepts `--email`.
 
+### Usage stats
+
+`GET /api/stats/me` returns the caller's own usage; the queries filter on the signed-in user, so
+nobody can read another user's figures.
+
+| Parameter | Values                                 | Default |
+| --------- | -------------------------------------- | ------- |
+| `days`    | `7`, `30` or `90`, today included      | `30`    |
+| `tz`      | an IANA time zone, e.g. `Europe/Paris` | `UTC`   |
+
+Anything else answers `400`. The response holds, for the period: the number of LLM calls
+(`requests`); prompt and completion tokens with their total, estimated and provider-reported
+parts; the average duration and time to first token (`null` without data); the count and rate of
+each outcome (`completed`, `interrupted`, `error`, `timeout`); and a `daily` series with one
+entry per day, days without activity at `0`.
+
+Days are cut in the requested time zone, by the database (so a call made at 23:30 UTC belongs to
+the next day in `Europe/Paris`), and the period starts at the local midnight of its first day.
+Tokens are summed from the stored assistant messages: deleting a conversation removes its
+tokens from the stats, while its recorded calls stay counted.
+
 ## Local development
 
 Prerequisites: Node 24 (see `.nvmrc`), Docker. Only PostgreSQL runs in a container; the API and

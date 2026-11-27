@@ -100,6 +100,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StatsController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -208,6 +224,52 @@ export interface components {
             status: "ok" | "error";
             /** @enum {string} */
             database: "up" | "down";
+        };
+        UserStats: {
+            period: components["schemas"]["StatsPeriod"];
+            requests: number;
+            tokens: {
+                prompt: components["schemas"]["StatsTokenCounts"];
+                completion: components["schemas"]["StatsTokenCounts"];
+            };
+            averages: {
+                durationMs: number | null;
+                timeToFirstTokenMs: number | null;
+            };
+            outcomes: {
+                completed: components["schemas"]["StatsOutcome"];
+                interrupted: components["schemas"]["StatsOutcome"];
+                error: components["schemas"]["StatsOutcome"];
+                timeout: components["schemas"]["StatsOutcome"];
+            };
+            daily: components["schemas"]["StatsDailyPoint"][];
+        };
+        StatsPeriod: {
+            days: number;
+            timeZone: string;
+            /** @description First day of the period, YYYY-MM-DD */
+            from: string;
+            /** @description Last day of the period (today), YYYY-MM-DD */
+            to: string;
+        };
+        StatsTokenCounts: {
+            total: number;
+            /** @description Counted with a heuristic (about 4 characters per token) */
+            estimated: number;
+            /** @description Reported by the LLM provider */
+            reported: number;
+        };
+        StatsOutcome: {
+            count: number;
+            /** @description Share of the requests of the period (0 to 1) */
+            rate: number;
+        };
+        StatsDailyPoint: {
+            /** @description Calendar day, YYYY-MM-DD, in the requested time zone */
+            date: string;
+            requests: number;
+            promptTokens: number;
+            completionTokens: number;
         };
     };
     responses: never;
@@ -530,6 +592,43 @@ export interface operations {
             };
             /** @description An answer is already being generated */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StatsController_me: {
+        parameters: {
+            query?: {
+                days?: 7 | 30 | 90;
+                tz?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's own usage over the period: LLM calls, tokens, response times and a per-day series. Tokens come from the answers still stored: deleting a conversation removes its tokens. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserStats"];
+                };
+            };
+            /** @description Invalid `days` or `tz` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired session */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

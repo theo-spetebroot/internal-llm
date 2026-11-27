@@ -1,5 +1,5 @@
-import { applyDecorators, Body, SetMetadata } from '@nestjs/common';
-import { ApiBody, ApiResponse } from '@nestjs/swagger';
+import { applyDecorators, Body, Query, SetMetadata } from '@nestjs/common';
+import { ApiBody, ApiQuery, ApiResponse, type SchemaObject } from '@nestjs/swagger';
 import type { z } from 'zod';
 
 import { toOpenApiSchema } from './zod-openapi.js';
@@ -23,6 +23,38 @@ export function ZodBody(schema: z.ZodType): ParameterDecorator {
         // Optional when the schema accepts a missing body (e.g. `.default({})`).
         required: !schema.safeParse(undefined).success,
       })(target, propertyKey, descriptor);
+    }
+  };
+}
+
+interface QueryParameterSchema {
+  properties?: Record<string, SchemaObject>;
+  required?: string[];
+}
+
+/**
+ * The whole query string validated (and transformed) by a Zod object schema, documented in
+ * Swagger as one parameter per property. The annotated parameter should be typed as
+ * `z.output<typeof schema>`. Give the schema no `id`: its properties must stay inline.
+ */
+export function ZodQuery(schema: z.ZodType): ParameterDecorator {
+  return (target, propertyKey, parameterIndex) => {
+    Query(new ZodValidationPipe(schema))(target, propertyKey, parameterIndex);
+
+    if (propertyKey === undefined) return;
+    const descriptor = Object.getOwnPropertyDescriptor(target, propertyKey);
+    if (!descriptor) return;
+
+    const { properties = {}, required = [] } = toOpenApiSchema(
+      schema,
+      'input',
+    ) as QueryParameterSchema;
+    for (const [name, property] of Object.entries(properties)) {
+      ApiQuery({ name, required: required.includes(name), schema: property })(
+        target,
+        propertyKey,
+        descriptor,
+      );
     }
   };
 }

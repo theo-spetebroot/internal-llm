@@ -11,6 +11,7 @@ import { ConversationsModule } from './conversations/conversations.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LoggingModule } from './logging/logging.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { StatsModule } from './stats/stats.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     AuthModule,
     ConversationsModule,
     ChatModule,
+    StatsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor }],
