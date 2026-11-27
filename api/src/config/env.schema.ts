@@ -11,6 +11,9 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
 
+  /** Minimum level of the logs (`silent` turns them off). */
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+
   /** Secret used to sign session JWTs. Generate one with `openssl rand -base64 48`. */
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long'),
   /** Session lifetime, shared by the JWT and its cookie. Default: 7 days. */
@@ -36,6 +39,11 @@ export const envSchema = z.object({
     .trim()
     .optional()
     .transform((value) => (value === '' ? undefined : value)),
+  /**
+   * Recorded LLM calls older than this many days are deleted by the daily purge. The upper
+   * bound (10 years) only keeps the cut-off date a valid date.
+   */
+  LLM_CALL_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
 });
 
 export type Env = z.infer<typeof envSchema>;

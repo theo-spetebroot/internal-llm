@@ -96,6 +96,22 @@ docker compose down               # stop (add -v to also delete the database vol
 Every variable of `.env.example` is passed to the containers. Set `COOKIE_SECURE=true` once the
 app is served over HTTPS.
 
+### Purging old LLM calls
+
+Every LLM call is recorded in the `llm_calls` table (timings, outcome, no text). So that it does
+not grow forever, the API deletes the records older than `LLM_CALL_RETENTION_DAYS` (90 by
+default, minimum 1) every day at 03:00 UTC, and logs how many rows it deleted. Only `llm_calls`
+is purged: conversations and messages are never deleted.
+
+To run the purge at once (it also accepts `--days <n>` to override the retention):
+
+```sh
+docker compose exec api node dist/cli/purge-llm-calls.js    # Docker
+npm run llm-calls:purge                                     # local development, from api/
+```
+
+With PowerShell, `npm run` swallows `--days`: set `$env:LLM_CALL_RETENTION_DAYS` instead.
+
 ### Published images
 
 Every merge to `main` publishes three images to GitHub Container Registry
@@ -215,6 +231,44 @@ npm run user:promote             # interactive: email of an account to make admi
 # Web — http://localhost:5173 (proxies /api to the API)
 cd web && npm ci && npm run dev
 ```
+
+## Logging
+
+The API logs with [pino](https://getpino.io/) (through `nestjs-pino`). `LOG_LEVEL` sets the minimum
+level (`info` by default; `silent` turns the logs off). In production, and in the Docker image, each
+log line is one JSON object; with `npm run start:dev` they are readable (`pino-pretty`, a
+development dependency). The tests are silent.
+
+```sh
+docker compose logs -f api
+```
+
+```json
+{
+  "level": "info",
+  "time": "2026-11-27T20:44:27.990Z",
+  "requestId": "3f2c9a1e-8d4b-4c5e-9a7f-1b2c3d4e5f60",
+  "req": { "method": "GET", "path": "/api/conversations" },
+  "res": { "statusCode": 200 },
+  "responseTime": 4,
+  "userId": "cmid1x0f60000...",
+  "msg": "GET /api/conversations 200"
+}
+```
+
+- **Request id.** Every request has an id, returned in the `X-Request-Id` response header and
+  present as `requestId` in every line written while the request is handled, including the line
+  `LlmService` writes for each LLM call. The id a caller sends in `X-Request-Id` is kept when it
+  is 1 to 64 letters, digits, dots, dashes or underscores; otherwise a UUID is generated. Nginx
+  forwards the caller's id, or generates one, so a request has the same id from the proxy to the
+  API. To follow one request: `docker compose logs api | grep '"requestId":"<id>"'`.
+- **What is logged for a request**: method, path (without the query string), status, duration in
+  milliseconds and, once signed in, the user id. 4xx answers are warnings and 5xx errors. The
+  health check is not logged.
+- **What is never logged**: request bodies, message contents, cookies, the `Authorization`
+  header, passwords. The request and response serializers keep headers and bodies out of the
+  lines, and redaction rules (`api/src/logging/logger.config.ts`) mask them anyway if something
+  logs them by mistake. Both are covered by tests.
 
 ## Web client
 

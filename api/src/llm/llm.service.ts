@@ -1,9 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { LlmCallOutcome } from '../generated/prisma/enums.js';
 import { raceAbort } from './abort.utils.js';
 import { isNetworkError, LlmError } from './llm.errors.js';
-import { LlmCallRecorder } from './llm-call.recorder.js';
+import { type LlmCallRecord, LlmCallRecorder } from './llm-call.recorder.js';
 import type { LlmMessage, LlmProvider, LlmUsage, TokenUsage } from './llm.types.js';
 import { estimateMessagesTokens, estimateTokens } from './token-estimator.js';
 
@@ -38,6 +38,8 @@ class LlmTimeoutSignal extends Error {}
  */
 @Injectable()
 export class LlmService {
+  private readonly logger = new Logger(LlmService.name);
+
   constructor(
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
     @Inject(LLM_OPTIONS) private readonly options: LlmOptions,
@@ -149,7 +151,7 @@ export class LlmService {
     } finally {
       clearTimeout(timer);
       clientSignal.removeEventListener('abort', forwardAbort);
-      this.recorder.record({
+      const call = {
         userId: context.userId,
         conversationId: context.conversationId,
         provider: this.provider.name,
@@ -158,8 +160,23 @@ export class LlmService {
         timeToFirstTokenMs,
         outcome: outcome ?? LlmCallOutcome.INTERRUPTED,
         errorCode,
-      });
+      };
+      this.recorder.record(call);
+      this.logCall(call);
     }
+  }
+
+  /** One line per call, tied to its request by the request id. Never the prompt or the answer. */
+  private logCall(call: LlmCallRecord): void {
+    const firstToken =
+      call.timeToFirstTokenMs === null
+        ? 'no token'
+        : `first token after ${call.timeToFirstTokenMs} ms`;
+    const message =
+      `LLM call ${call.outcome} (provider ${call.provider}, ${call.durationMs} ms, ${firstToken}` +
+      `${call.errorCode === null ? '' : `, ${call.errorCode}`})`;
+    if (call.errorCode === null) this.logger.log(message);
+    else this.logger.warn(message);
   }
 
   private withSystemPrompt(history: LlmMessage[]): LlmMessage[] {
