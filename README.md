@@ -211,6 +211,44 @@ npm run user:promote             # interactive: email of an account to make admi
 cd web && npm ci && npm run dev
 ```
 
+## Logging
+
+The API logs with [pino](https://getpino.io/) (through `nestjs-pino`). `LOG_LEVEL` sets the minimum
+level (`info` by default; `silent` turns the logs off). In production, and in the Docker image, each
+log line is one JSON object; with `npm run start:dev` they are readable (`pino-pretty`, a
+development dependency). The tests are silent.
+
+```sh
+docker compose logs -f api
+```
+
+```json
+{
+  "level": "info",
+  "time": "2026-11-27T20:44:27.990Z",
+  "requestId": "3f2c9a1e-8d4b-4c5e-9a7f-1b2c3d4e5f60",
+  "req": { "method": "GET", "path": "/api/conversations" },
+  "res": { "statusCode": 200 },
+  "responseTime": 4,
+  "userId": "cmid1x0f60000...",
+  "msg": "GET /api/conversations 200"
+}
+```
+
+- **Request id.** Every request has an id, returned in the `X-Request-Id` response header and
+  present as `requestId` in every line written while the request is handled, including the line
+  `LlmService` writes for each LLM call. The id a caller sends in `X-Request-Id` is kept when it
+  is 1 to 64 letters, digits, dots, dashes or underscores; otherwise a UUID is generated. Nginx
+  forwards the caller's id, or generates one, so a request has the same id from the proxy to the
+  API. To follow one request: `docker compose logs api | grep '"requestId":"<id>"'`.
+- **What is logged for a request**: method, path (without the query string), status, duration in
+  milliseconds and, once signed in, the user id. 4xx answers are warnings and 5xx errors. The
+  health check is not logged.
+- **What is never logged**: request bodies, message contents, cookies, the `Authorization`
+  header, passwords. The request and response serializers keep headers and bodies out of the
+  lines, and redaction rules (`api/src/logging/logger.config.ts`) mask them anyway if something
+  logs them by mistake. Both are covered by tests.
+
 ## Web client
 
 - **Stack**: React 19, Vite, TanStack Query, React Router, Tailwind CSS 4 with shadcn/ui

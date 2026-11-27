@@ -47,3 +47,24 @@ describe('api/.env.example', () => {
     expect(() => validateEnv(example)).not.toThrow();
   });
 });
+
+describe('LOG_LEVEL', () => {
+  const baseEnv = {
+    DATABASE_URL: 'postgresql://user:password@localhost:5432/db',
+    JWT_SECRET: 'x'.repeat(32),
+  };
+  const parse = (value?: string) =>
+    envSchema.safeParse(value === undefined ? baseEnv : { ...baseEnv, LOG_LEVEL: value });
+
+  it('defaults to info', () => {
+    expect(parse().data?.LOG_LEVEL).toBe('info');
+  });
+
+  it.each(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])('accepts %s', (level) => {
+    expect(parse(level).data?.LOG_LEVEL).toBe(level);
+  });
+
+  it.each(['', 'INFO', 'verbose', 'warning'])('refuses %j', (level) => {
+    expect(parse(level).success).toBe(false);
+  });
+});

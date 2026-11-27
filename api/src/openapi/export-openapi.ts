@@ -17,16 +17,17 @@ import { NestFactory } from '@nestjs/core';
 
 process.env['DATABASE_URL'] ??= 'postgresql://unused:unused@localhost:5432/unused';
 process.env['JWT_SECRET'] ??= 'placeholder-secret-for-openapi-export-only';
+process.env['LOG_LEVEL'] ??= 'silent';
 
 // Imported after the placeholders: the config is validated when the module is loaded.
 const { AppModule } = await import('../app.module.js');
-const { configureApp } = await import('../app.setup.js');
+const { APP_FACTORY_OPTIONS, configureApp } = await import('../app.setup.js');
 const { createOpenApiDocument } = await import('./openapi.js');
 
 const OUTPUT = new URL('../../openapi.json', import.meta.url);
 
 Logger.overrideLogger(['error']);
-const app = await NestFactory.create(AppModule);
+const app = await NestFactory.create(AppModule, APP_FACTORY_OPTIONS);
 configureApp(app);
 const document = createOpenApiDocument(app);
 await app.close();
