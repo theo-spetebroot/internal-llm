@@ -96,6 +96,22 @@ docker compose down               # stop (add -v to also delete the database vol
 Every variable of `.env.example` is passed to the containers. Set `COOKIE_SECURE=true` once the
 app is served over HTTPS.
 
+### Purging old LLM calls
+
+Every LLM call is recorded in the `llm_calls` table (timings, outcome, no text). So that it does
+not grow forever, the API deletes the records older than `LLM_CALL_RETENTION_DAYS` (90 by
+default, minimum 1) every day at 03:00 UTC, and logs how many rows it deleted. Only `llm_calls`
+is purged: conversations and messages are never deleted.
+
+To run the purge at once (it also accepts `--days <n>` to override the retention):
+
+```sh
+docker compose exec api node dist/cli/purge-llm-calls.js    # Docker
+npm run llm-calls:purge                                     # local development, from api/
+```
+
+With PowerShell, `npm run` swallows `--days`: set `$env:LLM_CALL_RETENTION_DAYS` instead.
+
 ### Published images
 
 Every merge to `main` publishes three images to GitHub Container Registry
