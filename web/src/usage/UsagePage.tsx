@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/layout/PageHeader';
 
+import { ActivityCharts } from './ActivityCharts';
 import { KeyFigures } from './KeyFigures';
 import { PeriodSelector } from './PeriodSelector';
 import { useMyStats } from './stats-api';
@@ -55,6 +56,7 @@ export function UsagePage() {
         )}
       >
         <KeyFigures stats={stats.data} />
+        <ActivityCharts stats={stats.data} />
       </div>
     );
   }

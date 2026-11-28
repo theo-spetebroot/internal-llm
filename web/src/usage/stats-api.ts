@@ -6,6 +6,8 @@ import type { components } from '@/api/schema';
 import type { UsagePeriod } from './usage-period';
 
 export type UserStats = components['schemas']['UserStats'];
+/** One day of the per-day series. */
+export type DailyPoint = components['schemas']['StatsDailyPoint'];
 
 /** What the stats routes take: the period, and the time zone the days are cut in. */
 export interface StatsQuery {

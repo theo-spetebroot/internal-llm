@@ -209,3 +209,35 @@ describe('when the figures cannot be loaded', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+describe('the charts of the period', () => {
+  it('draw one bar per day, and follow the period', async () => {
+    backend.stats.me = (query) =>
+      makeUserStats({
+        days: Number(query.get('days')) as 7 | 30 | 90,
+        requestsPerDay: (index) => index % 4,
+      });
+    const { user } = renderApp('/usage');
+
+    const requests = await screen.findByRole('group', { name: /^Requêtes par jour/ });
+    expect(within(requests).getAllByRole('img')).toHaveLength(30);
+    expect(
+      within(screen.getByRole('group', { name: /^Tokens par jour/ })).getAllByRole('img'),
+    ).toHaveLength(30);
+
+    await user.click(screen.getByRole('radio', { name: '7 jours' }));
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('group', { name: /^Requêtes par jour/ })).getAllByRole('img'),
+      ).toHaveLength(7);
+    });
+  });
+
+  it('are not drawn when there is nothing to count', async () => {
+    renderApp('/usage');
+
+    await screen.findByRole('heading', { name: 'Rien à compter pour l’instant.' });
+    expect(screen.queryByRole('group', { name: /par jour/ })).not.toBeInTheDocument();
+  });
+});
