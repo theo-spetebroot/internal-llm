@@ -57,34 +57,39 @@ const dailyPointSchema = z
   })
   .meta({ id: 'StatsDailyPoint' });
 
-export const userStatsSchema = z
-  .object({
-    period: z
-      .object({
-        days: z.number().int(),
-        timeZone: z.string(),
-        from: z.string().describe('First day of the period, YYYY-MM-DD'),
-        to: z.string().describe('Last day of the period (today), YYYY-MM-DD'),
-      })
-      .meta({ id: 'StatsPeriod' }),
-    /** LLM calls started in the period. */
-    requests: count,
-    tokens: z.object({ prompt: tokenCountsSchema, completion: tokenCountsSchema }),
-    /** Null when there is no data to average. */
-    averages: z.object({
-      durationMs: z.number().int().nonnegative().nullable(),
-      timeToFirstTokenMs: z.number().int().nonnegative().nullable(),
-    }),
-    outcomes: z.object({
-      completed: outcomeSchema,
-      interrupted: outcomeSchema,
-      error: outcomeSchema,
-      timeout: outcomeSchema,
-    }),
-    /** One entry per day of the period, oldest first; days without activity are at 0. */
-    daily: z.array(dailyPointSchema),
-  })
-  .meta({ id: 'UserStats' });
+/**
+ * The figures of a period, whoever they cover: one user (`UserStats`) or the whole instance.
+ * It has no `id` of its own, so each response schema built on it is named separately.
+ */
+export const usageStatsSchema = z.object({
+  period: z
+    .object({
+      days: z.number().int(),
+      timeZone: z.string(),
+      from: z.string().describe('First day of the period, YYYY-MM-DD'),
+      to: z.string().describe('Last day of the period (today), YYYY-MM-DD'),
+    })
+    .meta({ id: 'StatsPeriod' }),
+  /** LLM calls started in the period. */
+  requests: count,
+  tokens: z.object({ prompt: tokenCountsSchema, completion: tokenCountsSchema }),
+  /** Null when there is no data to average. */
+  averages: z.object({
+    durationMs: z.number().int().nonnegative().nullable(),
+    timeToFirstTokenMs: z.number().int().nonnegative().nullable(),
+  }),
+  outcomes: z.object({
+    completed: outcomeSchema,
+    interrupted: outcomeSchema,
+    error: outcomeSchema,
+    timeout: outcomeSchema,
+  }),
+  /** One entry per day of the period, oldest first; days without activity are at 0. */
+  daily: z.array(dailyPointSchema),
+});
 
+export const userStatsSchema = usageStatsSchema.meta({ id: 'UserStats' });
+
+export type UsageStatsDto = z.infer<typeof usageStatsSchema>;
 export type UserStatsDto = z.infer<typeof userStatsSchema>;
 export type StatsDailyPointDto = z.infer<typeof dailyPointSchema>;

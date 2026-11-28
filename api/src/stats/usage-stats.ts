@@ -1,6 +1,6 @@
-import type { StatsDailyPointDto, StatsQuery, UserStatsDto } from './stats.schemas.js';
+import type { StatsDailyPointDto, StatsQuery, UsageStatsDto } from './stats.schemas.js';
 
-/** LLM calls of one local day, as aggregated by the database. */
+/** LLM calls of one local day, as aggregated by the database (of one user, or of everyone). */
 export interface CallDayRow {
   day: string;
   requests: number;
@@ -19,7 +19,7 @@ export interface CallDayRow {
   completionReported: number;
 }
 
-interface UserStatsInput {
+interface UsageStatsInput {
   query: StatsQuery;
   /** Every day of the period, oldest first. */
   days: string[];
@@ -36,11 +36,17 @@ function average(total: number, count: number): number | null {
   return count === 0 ? null : Math.round(total / count);
 }
 
+/** `count` out of `total`, between 0 and 1 (0 when there is nothing to count). */
+export function rate(count: number, total: number): number {
+  return total === 0 ? 0 : Math.round((count / total) * RATE_PRECISION) / RATE_PRECISION;
+}
+
 /**
  * Turns the per-day rows into the response: one daily point per day of the period (zeros when
  * nothing happened) and the totals of those same days. Rows outside the period are ignored.
+ * It does not know whose calls they are: the same code serves one user and the whole instance.
  */
-export function buildUserStats({ query, days, calls }: UserStatsInput): UserStatsDto {
+export function buildUsageStats({ query, days, calls }: UsageStatsInput): UsageStatsDto {
   const callsByDay = new Map(calls.map((row) => [row.day, row]));
   const callRows = days.flatMap((day) => callsByDay.get(day) ?? []);
 
@@ -55,10 +61,7 @@ export function buildUserStats({ query, days, calls }: UserStatsInput): UserStat
   });
 
   const requests = sum(callRows, (row) => row.requests);
-  const outcome = (count: number) => ({
-    count,
-    rate: requests === 0 ? 0 : Math.round((count / requests) * RATE_PRECISION) / RATE_PRECISION,
-  });
+  const outcome = (count: number) => ({ count, rate: rate(count, requests) });
   const tokenCounts = (estimated: number, reported: number) => ({
     total: estimated + reported,
     estimated,
