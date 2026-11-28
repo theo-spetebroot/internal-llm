@@ -8,8 +8,9 @@ export const DEFAULT_STATS_DAYS = 30;
 export const DEFAULT_STATS_TIME_ZONE = 'UTC';
 
 /**
- * Query of `GET /api/stats/me`. Unknown parameters are ignored. Deliberately has no `id`:
- * `ZodQuery` documents each property as a query parameter, which needs them inline.
+ * Query of `GET /api/stats/me` and `GET /api/admin/stats`. Unknown parameters are ignored.
+ * Deliberately has no `id`: `ZodQuery` documents each property as a query parameter, which
+ * needs them inline.
  */
 export const statsQuerySchema = z.object({
   days: z.coerce

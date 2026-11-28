@@ -393,6 +393,67 @@
         ]
       }
     },
+    "/api/admin/stats": {
+      "get": {
+        "operationId": "AdminStatsController_get",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 30,
+              "description": "Length of the period, in days, today included",
+              "type": "integer",
+              "enum": [
+                7,
+                30,
+                90
+              ]
+            }
+          },
+          {
+            "name": "tz",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "UTC",
+              "description": "IANA time zone the days are cut in (default UTC)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The usage of the whole instance over the period, with the same figures and the same parameters as `GET /api/stats/me` (all users' LLM calls, tokens, response times and a per-day series), plus the number of active users (accounts with at least one call in the period) and a ranking of every account: email, display name, requests, tokens and failure rate (errors and timeouts over requests). Nothing else about an account is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminStats"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid `days` or `tz`"
+          },
+          "401": {
+            "description": "Missing, invalid or expired session"
+          },
+          "403": {
+            "description": "Signed in, but not an admin"
+          }
+        },
+        "security": [
+          {
+            "access_token": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "HealthController_check",
@@ -793,7 +854,7 @@
         ],
         "additionalProperties": false
       },
-      "UserStats": {
+      "AdminStats": {
         "type": "object",
         "properties": {
           "period": {
@@ -871,6 +932,19 @@
             "items": {
               "$ref": "#/components/schemas/StatsDailyPoint"
             }
+          },
+          "activeUsers": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Accounts with at least one LLM call started in the period, whatever its outcome"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsUserRankingEntry"
+            },
+            "description": "Every account, most requests first (ties by email). An account without any call in the period is listed with zeros."
           }
         },
         "required": [
@@ -879,7 +953,9 @@
           "tokens",
           "averages",
           "outcomes",
-          "daily"
+          "daily",
+          "activeUsers",
+          "users"
         ],
         "additionalProperties": false
       },
@@ -988,6 +1064,138 @@
           "requests",
           "promptTokens",
           "completionTokens"
+        ],
+        "additionalProperties": false
+      },
+      "StatsUserRankingEntry": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "The user's LLM calls started in the period"
+          },
+          "promptTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "completionTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "failureRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Share of the user's requests of the period that ended in an error or a timeout (0 to 1, 0 without any request). A call the caller interrupted is not a failure. Not the same as `outcomes.error.rate`, which counts errors only (timeouts have their own outcome) and covers the whole instance."
+          }
+        },
+        "required": [
+          "email",
+          "displayName",
+          "requests",
+          "promptTokens",
+          "completionTokens",
+          "failureRate"
+        ],
+        "additionalProperties": false
+      },
+      "UserStats": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/StatsPeriod"
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "tokens": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "$ref": "#/components/schemas/StatsTokenCounts"
+              },
+              "completion": {
+                "$ref": "#/components/schemas/StatsTokenCounts"
+              }
+            },
+            "required": [
+              "prompt",
+              "completion"
+            ],
+            "additionalProperties": false
+          },
+          "averages": {
+            "type": "object",
+            "properties": {
+              "durationMs": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "timeToFirstTokenMs": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "durationMs",
+              "timeToFirstTokenMs"
+            ],
+            "additionalProperties": false
+          },
+          "outcomes": {
+            "type": "object",
+            "properties": {
+              "completed": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              },
+              "interrupted": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              },
+              "error": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              },
+              "timeout": {
+                "$ref": "#/components/schemas/StatsOutcome"
+              }
+            },
+            "required": [
+              "completed",
+              "interrupted",
+              "error",
+              "timeout"
+            ],
+            "additionalProperties": false
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatsDailyPoint"
+            }
+          }
+        },
+        "required": [
+          "period",
+          "requests",
+          "tokens",
+          "averages",
+          "outcomes",
+          "daily"
         ],
         "additionalProperties": false
       }

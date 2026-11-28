@@ -116,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AdminStatsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -225,7 +241,7 @@ export interface components {
             /** @enum {string} */
             database: "up" | "down";
         };
-        UserStats: {
+        AdminStats: {
             period: components["schemas"]["StatsPeriod"];
             requests: number;
             tokens: {
@@ -243,6 +259,10 @@ export interface components {
                 timeout: components["schemas"]["StatsOutcome"];
             };
             daily: components["schemas"]["StatsDailyPoint"][];
+            /** @description Accounts with at least one LLM call started in the period, whatever its outcome */
+            activeUsers: number;
+            /** @description Every account, most requests first (ties by email). An account without any call in the period is listed with zeros. */
+            users: components["schemas"]["StatsUserRankingEntry"][];
         };
         StatsPeriod: {
             days: number;
@@ -270,6 +290,35 @@ export interface components {
             requests: number;
             promptTokens: number;
             completionTokens: number;
+        };
+        StatsUserRankingEntry: {
+            email: string;
+            displayName: string;
+            /** @description The user's LLM calls started in the period */
+            requests: number;
+            promptTokens: number;
+            completionTokens: number;
+            /** @description Share of the user's requests of the period that ended in an error or a timeout (0 to 1, 0 without any request). A call the caller interrupted is not a failure. Not the same as `outcomes.error.rate`, which counts errors only (timeouts have their own outcome) and covers the whole instance. */
+            failureRate: number;
+        };
+        UserStats: {
+            period: components["schemas"]["StatsPeriod"];
+            requests: number;
+            tokens: {
+                prompt: components["schemas"]["StatsTokenCounts"];
+                completion: components["schemas"]["StatsTokenCounts"];
+            };
+            averages: {
+                durationMs: number | null;
+                timeToFirstTokenMs: number | null;
+            };
+            outcomes: {
+                completed: components["schemas"]["StatsOutcome"];
+                interrupted: components["schemas"]["StatsOutcome"];
+                error: components["schemas"]["StatsOutcome"];
+                timeout: components["schemas"]["StatsOutcome"];
+            };
+            daily: components["schemas"]["StatsDailyPoint"][];
         };
     };
     responses: never;
@@ -629,6 +678,50 @@ export interface operations {
             };
             /** @description Missing, invalid or expired session */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AdminStatsController_get: {
+        parameters: {
+            query?: {
+                days?: 7 | 30 | 90;
+                tz?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The usage of the whole instance over the period, with the same figures and the same parameters as `GET /api/stats/me` (all users' LLM calls, tokens, response times and a per-day series), plus the number of active users (accounts with at least one call in the period) and a ranking of every account: email, display name, requests, tokens and failure rate (errors and timeouts over requests). Nothing else about an account is returned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminStats"];
+                };
+            };
+            /** @description Invalid `days` or `tz` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Signed in, but not an admin */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
