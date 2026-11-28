@@ -90,6 +90,43 @@ export const usageStatsSchema = z.object({
 
 export const userStatsSchema = usageStatsSchema.meta({ id: 'UserStats' });
 
+const userRankingEntrySchema = z
+  .object({
+    email: z.string(),
+    displayName: z.string(),
+    requests: count.describe("The user's LLM calls started in the period"),
+    promptTokens: count,
+    completionTokens: count,
+    failureRate: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        "Share of the user's requests of the period that ended in an error or a timeout " +
+          '(0 to 1, 0 without any request). A call the caller interrupted is not a failure. ' +
+          'Not the same as `outcomes.error.rate`, which counts errors only (timeouts have ' +
+          'their own outcome) and covers the whole instance.',
+      ),
+  })
+  .meta({ id: 'StatsUserRankingEntry' });
+
+/** Whole-instance figures: those of `UserStats`, over every user, plus the per-user ranking. */
+export const adminStatsSchema = usageStatsSchema
+  .extend({
+    activeUsers: count.describe(
+      'Accounts with at least one LLM call started in the period, whatever its outcome',
+    ),
+    users: z
+      .array(userRankingEntrySchema)
+      .describe(
+        'Every account, most requests first (ties by email). An account without any call in ' +
+          'the period is listed with zeros.',
+      ),
+  })
+  .meta({ id: 'AdminStats' });
+
 export type UsageStatsDto = z.infer<typeof usageStatsSchema>;
 export type UserStatsDto = z.infer<typeof userStatsSchema>;
+export type AdminStatsDto = z.infer<typeof adminStatsSchema>;
+export type UserRankingEntryDto = z.infer<typeof userRankingEntrySchema>;
 export type StatsDailyPointDto = z.infer<typeof dailyPointSchema>;
