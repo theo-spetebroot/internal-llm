@@ -6,6 +6,7 @@ import { PageHeader } from '@/layout/PageHeader';
 
 import { ActivityCharts } from './ActivityCharts';
 import { KeyFigures } from './KeyFigures';
+import { OutcomeBreakdown } from './OutcomeBreakdown';
 import { PeriodSelector } from './PeriodSelector';
 import { useMyStats } from './stats-api';
 import { browserTimeZone } from './time-zone';
@@ -57,6 +58,7 @@ export function UsagePage() {
       >
         <KeyFigures stats={stats.data} />
         <ActivityCharts stats={stats.data} />
+        <OutcomeBreakdown outcomes={stats.data.outcomes} />
       </div>
     );
   }

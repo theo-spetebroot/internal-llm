@@ -130,20 +130,22 @@ describe('the figures of the signed-in user', () => {
         requestsPerDay: () => 5,
       });
     const { user } = renderApp('/usage');
-    await screen.findByText('150');
+    await findFigures();
+    const requests = () => within(figure('Requêtes'));
+    expect(requests().getByText('150')).toBeInTheDocument();
 
     const gate = Promise.withResolvers<undefined>();
     backend.stats.hold = gate.promise;
     await user.click(screen.getByRole('radio', { name: '7 jours' }));
 
     // No flash back to the loading state: the 30-day figures wait for the 7-day ones.
-    expect(screen.getByText('150')).toBeInTheDocument();
-    expect(screen.getByText('150').closest('[aria-busy]')).toHaveAttribute('aria-busy', 'true');
+    expect(requests().getByText('150')).toBeInTheDocument();
+    expect(figure('Requêtes').closest('[aria-busy]')).toHaveAttribute('aria-busy', 'true');
     expect(screen.queryByText('Chargement des chiffres…')).not.toBeInTheDocument();
 
     gate.resolve(undefined);
-    expect(await screen.findByText('35')).toBeInTheDocument();
-    expect(screen.getByText('35').closest('[aria-busy]')).toHaveAttribute('aria-busy', 'false');
+    expect(await requests().findByText('35')).toBeInTheDocument();
+    expect(figure('Requêtes').closest('[aria-busy]')).toHaveAttribute('aria-busy', 'false');
   });
 });
 
@@ -207,6 +209,27 @@ describe('when the figures cannot be loaded', () => {
 
     expect(await findFigures()).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('the outcome of the requests', () => {
+  it('is broken down under the charts', async () => {
+    backend.stats.me = makeUserStats({
+      requestsPerDay: () => 10,
+      outcomes: {
+        completed: { count: 250, rate: 0.8333 },
+        interrupted: { count: 30, rate: 0.1 },
+        error: { count: 15, rate: 0.05 },
+        timeout: { count: 5, rate: 0.0167 },
+      },
+    });
+    renderApp('/usage');
+
+    const section = await screen.findByRole('region', { name: 'Issue des requêtes' });
+    expect(within(section).getByText('Terminées').closest('li')).toHaveTextContent('83,3 %');
+    expect(within(section).getByText('Interrompues').closest('li')).toHaveTextContent('10 %');
+    expect(within(section).getByText('Erreurs').closest('li')).toHaveTextContent('5 %');
+    expect(within(section).getByText('Timeouts').closest('li')).toHaveTextContent('1,7 %');
   });
 });
 
