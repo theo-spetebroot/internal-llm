@@ -1,5 +1,5 @@
-import { LogOut, PanelLeftClose, Plus, X } from 'lucide-react';
-import { Link } from 'react-router';
+import { ChartColumn, LogOut, PanelLeftClose, Plus, X } from 'lucide-react';
+import { Link, NavLink } from 'react-router';
 
 import { useCurrentUser } from '@/auth/current-user';
 import { useLogout } from '@/auth/session';
@@ -7,6 +7,7 @@ import { Brand } from '@/components/Brand';
 import { ConversationList } from '@/conversations/ConversationList';
 import { Button } from '@/components/ui/button';
 import { SheetClose } from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
 import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
 
 import {
@@ -70,6 +71,19 @@ export function Sidebar({ variant, onCollapse, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="flex flex-col gap-3 border-t border-rule p-4">
+        <NavLink
+          to="/usage"
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            cn(
+              'flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-[15px] text-ink-2 transition-colors hover:bg-active hover:text-ink md:min-h-9 md:text-sm',
+              isActive && 'bg-active font-medium text-ink',
+            )
+          }
+        >
+          <ChartColumn className="size-[18px]" strokeWidth={1.7} aria-hidden="true" />
+          Usage
+        </NavLink>
         <ThemeSwitcher />
         <div className="flex items-center gap-3">
           <div
