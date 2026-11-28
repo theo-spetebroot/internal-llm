@@ -174,12 +174,12 @@ The same figures are kept on the recorded LLM call (`llm_calls`: `promptTokens`,
 computed from: a call, unlike a message, stays when its conversation is deleted. What a call
 records:
 
-| Call                                                                          | Tokens recorded                                           |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Completed                                                                     | the provider's figures, else an estimate                  |
-| Stopped (caller left, error, timeout) after some text                         | an estimate from the prompt and the text received         |
-| Error or timeout, no token received (the server got and processed the prompt) | the prompt, estimated; no answer (`completionTokens` = 0) |
-| Server never reached (`LLM_UNAVAILABLE`), or caller left before any token     | none (`null`)                                             |
+| Call                                                                                       | Tokens recorded                                           |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Completed                                                                                  | the provider's figures, else an estimate                  |
+| Stopped (caller left, error, timeout) after some text                                      | an estimate from the prompt and the text received         |
+| Error, timeout or caller left, no token received (the server got and processed the prompt) | the prompt, estimated; no answer (`completionTokens` = 0) |
+| Server never reached (`LLM_UNAVAILABLE`)                                                   | none (`null`)                                             |
 
 The `llm_calls` rows recorded before these columns existed keep `null` tokens: there is no
 backfill, so the tokens of past periods read 0 in the stats until new calls are made.

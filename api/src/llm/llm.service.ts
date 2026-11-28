@@ -68,23 +68,19 @@ export class LlmService {
   }
 
   /**
-   * Token usage recorded for a call that did not complete:
-   * - some text came back: estimated from the prompt and that text;
-   * - nothing came back, but the model server was reached and then failed or timed out: it
-   *   received and processed the prompt, so the prompt is counted and the answer is empty;
-   * - otherwise there is no figure (`null`): the server was never reached (`LLM_UNAVAILABLE`),
-   *   or the caller left before any token.
+   * Token usage recorded for a call that did not complete: estimated from the prompt and the
+   * text received so far, which is empty when no token came back (the model server received
+   * the prompt, so the prompt counts and the answer is 0). The only call without a figure
+   * (`null`) is the one that never reached the model server: `LLM_UNAVAILABLE` with no text
+   * received (a connection dropped mid-answer did reach it).
    */
   private usageOfUnfinishedCall(
     messages: LlmMessage[],
     answer: string,
     errorCode: string | null,
   ): TokenUsage | null {
-    if (answer !== '') return this.estimate(messages, answer);
-    if (errorCode === 'LLM_ERROR' || errorCode === 'LLM_TIMEOUT') {
-      return this.estimate(messages, '');
-    }
-    return null;
+    if (answer === '' && errorCode === 'LLM_UNAVAILABLE') return null;
+    return this.estimate(messages, answer);
   }
 
   /**

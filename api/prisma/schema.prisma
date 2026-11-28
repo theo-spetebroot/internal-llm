@@ -104,8 +104,8 @@ model LlmCall {
   // Token usage of the call, kept here (not only on the messages) so that it survives the
   // deletion of a conversation, like the call itself. `tokensEstimated` tells whether the counts
   // come from a heuristic (true) or were reported by the provider (false). All three are NULL
-  // when the call has no figure (the provider was never reached, or the call was interrupted
-  // before any token), and on the rows recorded before these columns existed: no backfill.
+  // when the call has no figure (the provider was never reached: LLM_UNAVAILABLE), and on the
+  // rows recorded before these columns existed: no backfill.
   promptTokens       Int?           @map("prompt_tokens")
   completionTokens   Int?           @map("completion_tokens")
   tokensEstimated    Boolean?       @map("tokens_estimated")

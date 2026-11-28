@@ -165,7 +165,7 @@ describe('StatsService (aggregation against PostgreSQL)', () => {
     });
 
     it('counts a call without token figures as a request that adds no token', async () => {
-      // Never reached the server, left before any token, or recorded before the token columns.
+      // Never reached the server, or recorded before the token columns existed.
       await addCall('2026-11-27T10:00:00Z', { outcome: LlmCallOutcome.ERROR });
       await addCall('2026-11-27T11:00:00Z', {
         promptTokens: null,

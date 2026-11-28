@@ -33,8 +33,8 @@ export class StatsService {
 
   /**
    * One row per local day, by the day the call started. Calls without a token figure (NULL:
-   * the model server was never reached, the caller left before any token, or the call was
-   * recorded before the token columns existed) count as requests but add no token.
+   * the model server was never reached, or the call was recorded before the token columns
+   * existed) count as requests but add no token.
    */
   private callsPerDay(userId: string, firstDay: string, timeZone: string): Promise<CallDayRow[]> {
     return this.prisma.$queryRaw<CallDayRow[]>`
