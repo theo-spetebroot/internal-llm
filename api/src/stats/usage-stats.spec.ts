@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildUserStats, type CallDayRow } from './user-stats.js';
+import { buildUsageStats, type CallDayRow, rate } from './usage-stats.js';
 
 const query = { days: 7 as const, tz: 'UTC' };
 const days = [
@@ -32,9 +32,9 @@ function callRow(day: string, fields: Partial<CallDayRow> = {}): CallDayRow {
   };
 }
 
-describe('buildUserStats', () => {
+describe('buildUsageStats', () => {
   it('returns zeros, no averages and one entry per day when there is no data', () => {
-    const stats = buildUserStats({ query, days, calls: [] });
+    const stats = buildUsageStats({ query, days, calls: [] });
 
     expect(stats.period).toEqual({
       days: 7,
@@ -53,7 +53,7 @@ describe('buildUserStats', () => {
   });
 
   it('fills the days without activity with zeros, in order', () => {
-    const stats = buildUserStats({
+    const stats = buildUsageStats({
       query,
       days,
       calls: [
@@ -75,7 +75,7 @@ describe('buildUserStats', () => {
   });
 
   it('weights the averages by the number of calls, not by the number of days', () => {
-    const stats = buildUserStats({
+    const stats = buildUsageStats({
       query,
       days,
       calls: [
@@ -100,7 +100,7 @@ describe('buildUserStats', () => {
   });
 
   it('computes the outcome counts and rates', () => {
-    const stats = buildUserStats({
+    const stats = buildUsageStats({
       query,
       days,
       calls: [
@@ -118,7 +118,7 @@ describe('buildUserStats', () => {
   });
 
   it('sums the tokens and tells the estimated ones from the reported ones', () => {
-    const stats = buildUserStats({
+    const stats = buildUsageStats({
       query,
       days,
       calls: [
@@ -137,7 +137,7 @@ describe('buildUserStats', () => {
   });
 
   it('counts a call without token figures as a request that adds no token', () => {
-    const stats = buildUserStats({
+    const stats = buildUsageStats({
       query,
       days,
       calls: [callRow('2026-11-27', { requests: 3, completed: 3, promptEstimated: 12 })],
@@ -149,7 +149,7 @@ describe('buildUserStats', () => {
   });
 
   it('ignores rows outside the period', () => {
-    const stats = buildUserStats({
+    const stats = buildUsageStats({
       query,
       days,
       calls: [
@@ -161,5 +161,18 @@ describe('buildUserStats', () => {
 
     expect(stats.requests).toBe(1);
     expect(stats.tokens.prompt.total).toBe(0);
+  });
+});
+
+describe('rate', () => {
+  it('is the share of the total, rounded to four decimals', () => {
+    expect(rate(1, 3)).toBe(0.3333);
+    expect(rate(2, 3)).toBe(0.6667);
+    expect(rate(1, 2)).toBe(0.5);
+    expect(rate(4, 4)).toBe(1);
+  });
+
+  it('is 0 when there is nothing to count', () => {
+    expect(rate(0, 0)).toBe(0);
   });
 });

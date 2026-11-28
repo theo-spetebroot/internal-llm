@@ -415,7 +415,7 @@ describe('LlmService', () => {
         expect(records).toHaveLength(1);
       });
 
-      it('has no figure when the caller leaves before any token', async () => {
+      it('counts the prompt, and no answer, when the caller leaves before any token', async () => {
         const provider: LlmProvider = { name: 'slow', chat: () => never() };
         const controller = new AbortController();
         setTimeout(() => {
@@ -427,7 +427,10 @@ describe('LlmService', () => {
           'LLM_ABORTED',
         );
 
-        expect(records[0]).toMatchObject({ outcome: LlmCallOutcome.INTERRUPTED, usage: null });
+        expect(records[0]).toMatchObject({
+          outcome: LlmCallOutcome.INTERRUPTED,
+          usage: { promptTokens: 1, completionTokens: 0, estimated: true },
+        });
         expect(records).toHaveLength(1);
       });
     });
