@@ -187,8 +187,8 @@ backfill, so the tokens of past periods read 0 in the stats until new calls are 
 ### Roles and access
 
 Every account has a role: `USER` (the default) or `ADMIN`. Admins can reach admin-only routes
-(marked `@RequireAdmin()` in the API). The role is part of the user returned by
-`GET /api/auth/me`.
+(marked `@RequireAdmin()` in the API; the first one is `GET /api/admin/stats`, see
+[Usage stats](#usage-stats)). The role is part of the user returned by `GET /api/auth/me`.
 
 - No session: `401`.
 - Signed in without the admin role, on an admin route: `403`. Admin routes are not another
@@ -228,6 +228,24 @@ conversation changes none of them, and a call counts on the day it started. A ca
 token figure (see [Token usage](#token-usage)) counts as a request and adds no token. Calls
 recorded before the token columns existed have none, and the daily purge removes the calls (and
 their tokens) older than `LLM_CALL_RETENTION_DAYS`.
+
+#### Instance-wide stats (admins)
+
+`GET /api/admin/stats` is the admin-only counterpart: `401` without a session, `403` for a signed-in
+user who is not an admin (the role is checked first, so a non-admin gets `403` even with invalid
+parameters). It takes the same `days` and `tz` parameters and returns the same figures as
+`/api/stats/me`, computed by the same code over the calls of every user, plus:
+
+- `activeUsers`: the accounts with at least one LLM call started in the period, whatever its
+  outcome;
+- `users`: a ranking of every account, those without any call in the period included (at `0`),
+  with its `email`, `displayName`, `requests`, `promptTokens`, `completionTokens` and
+  `failureRate`. Most requests first, ties ordered by email.
+
+`failureRate` is the share of the account's requests that ended in an error or a timeout; an
+interrupted call (the caller left) is not a failure. It is not `outcomes.error.rate`, which counts
+errors only (timeouts have their own outcome) and covers the whole instance. An account's entry
+holds nothing but its email, its display name and these figures: no id, role or password data.
 
 ## Local development
 
