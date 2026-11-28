@@ -313,6 +313,52 @@ describe('Chat (e2e)', () => {
       expect(records[0]?.timeToFirstTokenMs).toEqual(expect.any(Number));
     });
 
+    it('stores the estimated token usage on the record, like on the answer', async () => {
+      const events = await sendAndParse('a'.repeat(40));
+      const answer = eventsOfType(events, 'delta')
+        .map((delta) => delta.content)
+        .join('');
+
+      const [record] = await callRecords();
+      expect(record).toMatchObject({
+        promptTokens: 10,
+        completionTokens: Math.ceil(answer.length / 4),
+        tokensEstimated: true,
+      });
+      const assistant = (await storedMessages())[1];
+      expect(assistant).toMatchObject({
+        promptTokens: record?.promptTokens,
+        completionTokens: record?.completionTokens,
+        tokensEstimated: record?.tokensEstimated,
+      });
+    });
+
+    it('stores the usage reported by the provider on the record', async () => {
+      provider.reportedUsage = { promptTokens: 123, completionTokens: 45 };
+      await sendAndParse('Hello');
+
+      expect(await callRecords()).toMatchObject([
+        { promptTokens: 123, completionTokens: 45, tokensEstimated: false },
+      ]);
+    });
+
+    it('estimates the usage of a partial answer on the record', async () => {
+      provider.reportedUsage = { promptTokens: 999, completionTokens: 999 };
+      const events = await sendAndParse(`Break ${MOCK_ERROR_TRIGGER}`);
+      const partial = eventsOfType(events, 'delta')
+        .map((delta) => delta.content)
+        .join('');
+
+      expect(await callRecords()).toMatchObject([
+        {
+          outcome: 'ERROR',
+          promptTokens: Math.ceil(`Break ${MOCK_ERROR_TRIGGER}`.length / 4),
+          completionTokens: Math.ceil(partial.length / 4),
+          tokensEstimated: true,
+        },
+      ]);
+    });
+
     it('writes one record for each exchange', async () => {
       await sendAndParse('first');
       await sendAndParse('second');

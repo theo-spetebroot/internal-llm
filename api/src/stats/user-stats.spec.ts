@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildUserStats, type CallDayRow, type TokenDayRow } from './user-stats.js';
+import { buildUserStats, type CallDayRow } from './user-stats.js';
 
 const query = { days: 7 as const, tz: 'UTC' };
 const days = [
@@ -24,13 +24,6 @@ function callRow(day: string, fields: Partial<CallDayRow> = {}): CallDayRow {
     interrupted: 0,
     error: 0,
     timeout: 0,
-    ...fields,
-  };
-}
-
-function tokenRow(day: string, fields: Partial<TokenDayRow> = {}): TokenDayRow {
-  return {
-    day,
     promptEstimated: 0,
     promptReported: 0,
     completionEstimated: 0,
@@ -41,7 +34,7 @@ function tokenRow(day: string, fields: Partial<TokenDayRow> = {}): TokenDayRow {
 
 describe('buildUserStats', () => {
   it('returns zeros, no averages and one entry per day when there is no data', () => {
-    const stats = buildUserStats({ query, days, calls: [], tokens: [] });
+    const stats = buildUserStats({ query, days, calls: [] });
 
     expect(stats.period).toEqual({
       days: 7,
@@ -63,8 +56,10 @@ describe('buildUserStats', () => {
     const stats = buildUserStats({
       query,
       days,
-      calls: [callRow('2026-11-23', { requests: 2 }), callRow('2026-11-27', { requests: 1 })],
-      tokens: [tokenRow('2026-11-23', { promptEstimated: 10, completionReported: 5 })],
+      calls: [
+        callRow('2026-11-23', { requests: 2, promptEstimated: 10, completionReported: 5 }),
+        callRow('2026-11-27', { requests: 1 }),
+      ],
     });
 
     expect(stats.daily.map((point) => [point.date, point.requests])).toEqual([
@@ -98,7 +93,6 @@ describe('buildUserStats', () => {
           firstTokenSum: 50,
         }),
       ],
-      tokens: [],
     });
 
     expect(stats.averages.durationMs).toBe(250);
@@ -113,7 +107,6 @@ describe('buildUserStats', () => {
         callRow('2026-11-26', { requests: 2, completed: 1, error: 1 }),
         callRow('2026-11-27', { requests: 1, interrupted: 1 }),
       ],
-      tokens: [],
     });
 
     expect(stats.outcomes).toEqual({
@@ -128,10 +121,10 @@ describe('buildUserStats', () => {
     const stats = buildUserStats({
       query,
       days,
-      calls: [],
-      tokens: [
-        tokenRow('2026-11-26', { promptEstimated: 10, completionEstimated: 4 }),
-        tokenRow('2026-11-27', {
+      calls: [
+        callRow('2026-11-26', { requests: 1, promptEstimated: 10, completionEstimated: 4 }),
+        callRow('2026-11-27', {
+          requests: 2,
           promptReported: 30,
           completionEstimated: 1,
           completionReported: 6,
@@ -143,12 +136,27 @@ describe('buildUserStats', () => {
     expect(stats.tokens.completion).toEqual({ total: 11, estimated: 5, reported: 6 });
   });
 
+  it('counts a call without token figures as a request that adds no token', () => {
+    const stats = buildUserStats({
+      query,
+      days,
+      calls: [callRow('2026-11-27', { requests: 3, completed: 3, promptEstimated: 12 })],
+    });
+
+    expect(stats.requests).toBe(3);
+    expect(stats.tokens.prompt.total).toBe(12);
+    expect(stats.tokens.completion.total).toBe(0);
+  });
+
   it('ignores rows outside the period', () => {
     const stats = buildUserStats({
       query,
       days,
-      calls: [callRow('2026-11-20', { requests: 5 }), callRow('2026-11-27', { requests: 1 })],
-      tokens: [tokenRow('2026-11-28', { promptReported: 99 })],
+      calls: [
+        callRow('2026-11-20', { requests: 5, promptReported: 99 }),
+        callRow('2026-11-27', { requests: 1 }),
+        callRow('2026-11-28', { requests: 1, promptReported: 99 }),
+      ],
     });
 
     expect(stats.requests).toBe(1);

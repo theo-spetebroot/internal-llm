@@ -25,7 +25,10 @@ export class StatsController {
     status: 200,
     description:
       "The caller's own usage over the period: LLM calls, tokens, response times and a per-day " +
-      'series. Tokens come from the answers still stored: deleting a conversation removes its tokens.',
+      'series, all taken from the recorded LLM calls, so deleting a conversation changes none of ' +
+      'them. A call without a token figure (the model server was never reached, the caller left ' +
+      'before any token, or the call predates the token columns) counts as a request and adds no ' +
+      'token.',
     schema: userStatsSchema,
   })
   @ZodResponse({ status: 400, description: 'Invalid `days` or `tz`' })

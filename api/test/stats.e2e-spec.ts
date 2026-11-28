@@ -53,22 +53,30 @@ describe('GET /api/stats/me (e2e)', () => {
     bobCookie = await loginAs(http, bob);
   });
 
+  /**
+   * A recorded call with its tokens, in a conversation of its own (returned), whose answer is
+   * stored too, like a real exchange.
+   */
   async function addActivity(
     userId: string,
     at: Date,
     { durationMs = 100, promptTokens = 10, completionTokens = 5 } = {},
-  ): Promise<void> {
+  ): Promise<string> {
+    const conversation = await prisma.conversation.create({ data: { userId, title: 'Test' } });
     await prisma.llmCall.create({
       data: {
         userId,
+        conversationId: conversation.id,
         provider: 'mock',
         startedAt: at,
         durationMs,
         timeToFirstTokenMs: 10,
         outcome: LlmCallOutcome.COMPLETED,
+        promptTokens,
+        completionTokens,
+        tokensEstimated: true,
       },
     });
-    const conversation = await prisma.conversation.create({ data: { userId, title: 'Test' } });
     await prisma.message.create({
       data: {
         conversationId: conversation.id,
@@ -80,6 +88,7 @@ describe('GET /api/stats/me (e2e)', () => {
         tokensEstimated: true,
       },
     });
+    return conversation.id;
   }
 
   async function getStats(cookie: string, query = ''): Promise<StatsBody> {
@@ -138,6 +147,31 @@ describe('GET /api/stats/me (e2e)', () => {
       expect(aliceToday?.date).toBe(bobToday?.date);
       expect(aliceToday?.requests).toBe(1);
       expect(bobToday?.requests).toBe(2);
+    });
+  });
+
+  describe('deleting a conversation', () => {
+    it('leaves the stats unchanged, requests and tokens', async () => {
+      const recently = new Date(Date.now() - 60 * 60 * 1000);
+      await addActivity(aliceId, recently, { promptTokens: 10, completionTokens: 4 });
+      const deleted = await addActivity(aliceId, recently, {
+        promptTokens: 30,
+        completionTokens: 6,
+      });
+
+      const before = await getStats(aliceCookie);
+      await request(http)
+        .delete(`/api/conversations/${deleted}`)
+        .set('Cookie', aliceCookie)
+        .expect(204);
+      const after = await getStats(aliceCookie);
+
+      // The answer went with its conversation, the call and its tokens stayed.
+      expect(await prisma.message.count({ where: { conversationId: deleted } })).toBe(0);
+      expect(before.requests).toBe(2);
+      expect(before.tokens.prompt.total).toBe(40);
+      expect(before.tokens.completion.total).toBe(10);
+      expect(after).toEqual(before);
     });
   });
 

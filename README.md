@@ -169,6 +169,21 @@ provider can report its own usage — `chat()` resolves to `{ text, usage? }` an
 may return the usage when the stream ends — and `LlmService` then prefers it
 (`tokensEstimated: false`). A partial answer is always estimated.
 
+The same figures are kept on the recorded LLM call (`llm_calls`: `promptTokens`,
+`completionTokens`, `tokensEstimated`), which is what the [usage stats](#usage-stats) are
+computed from: a call, unlike a message, stays when its conversation is deleted. What a call
+records:
+
+| Call                                                                          | Tokens recorded                                           |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Completed                                                                     | the provider's figures, else an estimate                  |
+| Stopped (caller left, error, timeout) after some text                         | an estimate from the prompt and the text received         |
+| Error or timeout, no token received (the server got and processed the prompt) | the prompt, estimated; no answer (`completionTokens` = 0) |
+| Server never reached (`LLM_UNAVAILABLE`), or caller left before any token     | none (`null`)                                             |
+
+The `llm_calls` rows recorded before these columns existed keep `null` tokens: there is no
+backfill, so the tokens of past periods read 0 in the stats until new calls are made.
+
 ### Roles and access
 
 Every account has a role: `USER` (the default) or `ADMIN`. Admins can reach admin-only routes
@@ -208,8 +223,11 @@ entry per day, days without activity at `0`.
 
 Days are cut in the requested time zone, by the database (so a call made at 23:30 UTC belongs to
 the next day in `Europe/Paris`), and the period starts at the local midnight of its first day.
-Tokens are summed from the stored assistant messages: deleting a conversation removes its
-tokens from the stats, while its recorded calls stay counted.
+Every figure, tokens included, comes from the recorded LLM calls (`llm_calls`), so deleting a
+conversation changes none of them, and a call counts on the day it started. A call without a
+token figure (see [Token usage](#token-usage)) counts as a request and adds no token. Calls
+recorded before the token columns existed have none, and the daily purge removes the calls (and
+their tokens) older than `LLM_CALL_RETENTION_DAYS`.
 
 ## Local development
 

@@ -205,6 +205,234 @@ describe('LlmService', () => {
     });
   });
 
+  describe('token usage of the recorded call', () => {
+    // 'Hi' is 1 token; 'aaaa' is 1 token, 'aaaaaaaa' is 2.
+    const networkError = () =>
+      new TypeError('fetch failed', {
+        cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }),
+      });
+    const usageOfOnlyRecord = () => {
+      expect(records).toHaveLength(1);
+      return records[0]?.usage;
+    };
+
+    describe('completed calls', () => {
+      it('records the estimate, flagged as such, when the provider reports nothing', async () => {
+        await collect(newService(fakeProvider(['Hello', ' world', '!'])));
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 3,
+          estimated: true,
+        });
+      });
+
+      it('records the figures reported by the provider (streaming and one-shot)', async () => {
+        const reported = { promptTokens: 42, completionTokens: 7 };
+
+        await collect(newService(fakeProvider(['Hi'], 0, reported)));
+        await collect(
+          newService(fakeProvider(['Hi'], 0, reported), { ...defaults, stream: false }),
+        );
+
+        expect(records.map((record) => record.usage)).toEqual([
+          { ...reported, estimated: false },
+          { ...reported, estimated: false },
+        ]);
+      });
+    });
+
+    describe('calls that stopped after some text', () => {
+      it('estimates the usage of the text received when the caller leaves', async () => {
+        const provider: LlmProvider = {
+          name: 'leaving',
+          chat: () => never(),
+          async *chatStream(): AsyncGenerator<string, undefined> {
+            yield 'aaaa';
+            await never();
+          },
+        };
+        const controller = new AbortController();
+        setTimeout(() => {
+          controller.abort();
+        }, 50);
+
+        await expectLlmError(collect(newService(provider), controller.signal), 'LLM_ABORTED');
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 1,
+          estimated: true,
+        });
+      });
+
+      it('estimates the usage of the text received when the consumer stops iterating', async () => {
+        const service = newService(fakeProvider(['aaaa', 'bbbb', 'cccc']));
+        for await (const _delta of service.generate(
+          history,
+          new AbortController().signal,
+          context,
+        )) {
+          break;
+        }
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 1,
+          estimated: true,
+        });
+      });
+
+      it('estimates the usage of the text received when the model fails mid-answer', async () => {
+        const provider: LlmProvider = {
+          name: 'failing',
+          chat: () => never(),
+          async *chatStream(): AsyncGenerator<string, undefined> {
+            await wait(0);
+            yield 'aaaaaaaa';
+            throw new Error('HTTP 500');
+          },
+        };
+
+        await expectLlmError(collect(newService(provider)), 'LLM_ERROR');
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 2,
+          estimated: true,
+        });
+      });
+
+      it('does so even when the connection drops mid-answer: the server was reached', async () => {
+        const provider: LlmProvider = {
+          name: 'dropping',
+          chat: () => never(),
+          async *chatStream(): AsyncGenerator<string, undefined> {
+            await wait(0);
+            yield 'aaaa';
+            throw networkError();
+          },
+        };
+
+        await expectLlmError(collect(newService(provider)), 'LLM_UNAVAILABLE');
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 1,
+          estimated: true,
+        });
+      });
+    });
+
+    describe('calls that stopped before any token', () => {
+      it('counts the prompt, and no answer, when the model returns an error', async () => {
+        const provider: LlmProvider = {
+          name: 'broken',
+          chat: () => Promise.reject(new Error('HTTP 500')),
+        };
+
+        await expectLlmError(
+          collect(newService(provider, { ...defaults, stream: false })),
+          'LLM_ERROR',
+        );
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 0,
+          estimated: true,
+        });
+      });
+
+      it('counts the prompt, and no answer, on a timeout (one-shot)', async () => {
+        const provider: LlmProvider = { name: 'stuck', chat: () => never() };
+
+        await expectLlmError(
+          collect(newService(provider, { ...defaults, stream: false, timeoutMs: 50 })),
+          'LLM_TIMEOUT',
+        );
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 0,
+          estimated: true,
+        });
+      });
+
+      it('counts the prompt, and no answer, on a timeout before the first token (streaming)', async () => {
+        const provider: LlmProvider = {
+          name: 'silent',
+          chat: () => never(),
+          async *chatStream(): AsyncGenerator<string, undefined> {
+            await never();
+            yield 'unreachable';
+          },
+        };
+
+        await expectLlmError(
+          collect(newService(provider, { ...defaults, timeoutMs: 50 })),
+          'LLM_TIMEOUT',
+        );
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 1,
+          completionTokens: 0,
+          estimated: true,
+        });
+      });
+
+      it('counts the system prompt in the prompt tokens', async () => {
+        const provider: LlmProvider = {
+          name: 'broken',
+          chat: () => Promise.reject(new Error('HTTP 500')),
+        };
+        const service = newService(provider, {
+          ...defaults,
+          stream: false,
+          systemPrompt: 'a'.repeat(8),
+        });
+
+        await expectLlmError(collect(service), 'LLM_ERROR');
+
+        expect(usageOfOnlyRecord()).toEqual({
+          promptTokens: 2 + 1,
+          completionTokens: 0,
+          estimated: true,
+        });
+      });
+
+      it('has no figure when nothing reached the model server (LLM_UNAVAILABLE)', async () => {
+        const provider: LlmProvider = {
+          name: 'down',
+          chat: () => Promise.reject(networkError()),
+        };
+
+        await expectLlmError(
+          collect(newService(provider, { ...defaults, stream: false })),
+          'LLM_UNAVAILABLE',
+        );
+
+        expect(records[0]).toMatchObject({ errorCode: 'LLM_UNAVAILABLE', usage: null });
+        expect(records).toHaveLength(1);
+      });
+
+      it('has no figure when the caller leaves before any token', async () => {
+        const provider: LlmProvider = { name: 'slow', chat: () => never() };
+        const controller = new AbortController();
+        setTimeout(() => {
+          controller.abort();
+        }, 30);
+
+        await expectLlmError(
+          collect(newService(provider, { ...defaults, stream: false }), controller.signal),
+          'LLM_ABORTED',
+        );
+
+        expect(records[0]).toMatchObject({ outcome: LlmCallOutcome.INTERRUPTED, usage: null });
+        expect(records).toHaveLength(1);
+      });
+    });
+  });
+
   describe('timeouts', () => {
     it('times out a one-shot call that never answers, even if the provider ignores the signal', async () => {
       const provider: LlmProvider = { name: 'stuck', chat: () => never() };
@@ -312,7 +540,7 @@ describe('LlmService', () => {
       expect(record?.durationMs).toBeGreaterThanOrEqual(record?.timeToFirstTokenMs ?? Infinity);
     });
 
-    it('keeps only metadata: no prompt or answer text', async () => {
+    it('keeps only metadata and token counts: no prompt or answer text', async () => {
       await collect(newService(streamingProvider()));
       expect(Object.keys(records[0] ?? {}).sort()).toEqual(
         [
@@ -323,8 +551,12 @@ describe('LlmService', () => {
           'provider',
           'startedAt',
           'timeToFirstTokenMs',
+          'usage',
           'userId',
         ].sort(),
+      );
+      expect(Object.keys(records[0]?.usage ?? {}).sort()).toEqual(
+        ['completionTokens', 'estimated', 'promptTokens'].sort(),
       );
     });
 

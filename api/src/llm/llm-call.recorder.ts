@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 
 import { LlmCallOutcome } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { TokenUsage } from './llm.types.js';
 
 /** What is kept about one LLM call. Never contains prompt or answer text. */
 export interface LlmCallRecord {
@@ -13,6 +14,8 @@ export interface LlmCallRecord {
   timeToFirstTokenMs: number | null;
   outcome: LlmCallOutcome;
   errorCode: string | null;
+  /** Null when the call has no token figure (see `LlmService`). */
+  usage: TokenUsage | null;
 }
 
 /**
@@ -39,6 +42,9 @@ export class LlmCallRecorder implements OnModuleDestroy {
           timeToFirstTokenMs: call.timeToFirstTokenMs,
           outcome: call.outcome,
           errorCode: call.errorCode,
+          promptTokens: call.usage?.promptTokens ?? null,
+          completionTokens: call.usage?.completionTokens ?? null,
+          tokensEstimated: call.usage?.estimated ?? null,
         },
       })
       .then(
