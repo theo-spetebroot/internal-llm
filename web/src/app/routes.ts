@@ -6,6 +6,7 @@ import { ConversationPage } from '@/conversations/ConversationPage';
 import { AppShell } from '@/layout/AppShell';
 import { HomePage } from '@/pages/HomePage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { LazyUsagePage } from '@/usage/LazyUsagePage';
 
 /** Shared by the browser router (main.tsx) and the memory router of the tests. */
 export const routes: RouteObject[] = [
@@ -18,6 +19,7 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, Component: HomePage },
           { path: 'c/:conversationId', Component: ConversationPage },
+          { path: 'usage', Component: LazyUsagePage },
           { path: '*', Component: NotFoundPage },
         ],
       },

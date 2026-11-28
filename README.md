@@ -19,6 +19,13 @@ Web chat interface for a self-hosted open-source LLM.
   <tr>
     <td colspan="2" align="center"><img src="docs/screenshots/mobile-chat.png" alt="Conversation on a phone-sized screen, with the menu button at the top and the message field at the bottom" width="300"></td>
   </tr>
+  <tr>
+    <td><img src="docs/screenshots/usage-light.png" alt="Usage page in the light theme: key figures, requests and tokens per day with a tooltip on one bar, and the outcome of the requests" width="100%"></td>
+    <td><img src="docs/screenshots/usage-instance-dark.png" alt="Instance view of the usage page in the dark theme: the figures of everyone, the active users and the ranking of the accounts, the signed-in user's row highlighted" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/usage-mobile.png" alt="Usage page on a phone-sized screen: tabs, period selector, key figures in a grid, then the charts one under the other" width="300"></td>
+  </tr>
 </table>
 
 ## Repository layout
@@ -321,8 +328,17 @@ docker compose logs -f api
 - **Rendering**: answers are Markdown (react-markdown + remark-gfm, raw HTML never rendered).
   The Markdown renderer, Shiki (code highlighting, JavaScript regex engine, no WebAssembly) and
   each language grammar are loaded on demand.
+- **Usage page** (`/usage`, an entry at the bottom of the sidebar): the signed-in user's figures
+  from `GET /api/stats/me` over 7, 30 or 90 days, cut in the browser's time zone: key figures,
+  requests and tokens per day, and how the requests ended. Admins also get an "Instance" tab
+  (`GET /api/admin/stats`: the figures of everyone, the active users and the ranking of the
+  accounts, their own row highlighted). The period and the view live in the address
+  (`/usage?periode=7&vue=instance`). The page is loaded on demand, and the charts are bars drawn
+  by hand, with no charting library (about 7 kB gzipped for the whole page): each bar is
+  reachable with the keyboard (arrow keys, Home, End), shows a tooltip with its date and exact
+  value on hover and focus, and each chart has a data table as a text alternative.
 - **Tests**: Vitest + Testing Library against the real routes and providers, with an in-memory
-  API mocked by MSW (`web/src/test/server.ts`), including the SSE stream.
+  API mocked by MSW (`web/src/test/server.ts`), including the SSE stream and the stats routes.
 
 ## Development workflow
 
