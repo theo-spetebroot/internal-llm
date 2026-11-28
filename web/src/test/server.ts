@@ -5,10 +5,10 @@ import { z } from 'zod';
 import type { ChatErrorCode, ChatEvent } from '@/api/chat-events';
 import type { User } from '@/api/client';
 import type { ConversationDetail, Message } from '@/conversations/conversations-api';
-import type { UserStats } from '@/usage/stats-api';
+import type { AdminStats, UserStats } from '@/usage/stats-api';
 import type { UsagePeriod } from '@/usage/usage-period';
 
-import { makeUserStats } from './stats-fixtures';
+import { makeAdminStats, makeUserStats } from './stats-fixtures';
 
 export const testUser: User = {
   id: 'user-1',
@@ -43,6 +43,11 @@ export interface StatsScript {
    * query (to answer each period). Default: no activity over the requested period.
    */
   me?: UserStats | number | ((query: URLSearchParams) => UserStats | number);
+  /**
+   * The answer of `GET /api/admin/stats`, like `me`. Default: the figures with no activity if
+   * the signed-in user is an admin, a 403 otherwise (as the API does).
+   */
+  admin?: AdminStats | number | ((query: URLSearchParams) => AdminStats | number);
   /** Every stats answer waits for this promise to settle. */
   hold?: Promise<unknown>;
 }
@@ -71,6 +76,8 @@ export const backend = {
   stats: {} as StatsScript,
   /** Query string of each `GET /api/stats/me` received. */
   statsRequests: [] as URLSearchParams[],
+  /** Query string of each `GET /api/admin/stats` received. */
+  adminStatsRequests: [] as URLSearchParams[],
 
   reset() {
     this.loggedIn = false;
@@ -81,6 +88,7 @@ export const backend = {
     this.sendRequests = 0;
     this.stats = {};
     this.statsRequests = [];
+    this.adminStatsRequests = [];
     nextId = 1;
   },
 
@@ -169,6 +177,25 @@ export const handlers = [
     // Without a script: no activity, over the period that was asked for.
     const days = Number(query.get('days') ?? 30) as UsagePeriod;
     return HttpResponse.json(answer ?? makeUserStats({ days }));
+  }),
+
+  http.get('/api/admin/stats', async ({ request }) => {
+    if (!backend.loggedIn) return unauthorized();
+    const query = new URL(request.url).searchParams;
+    backend.adminStatsRequests.push(query);
+    await backend.stats.hold;
+
+    const { admin } = backend.stats;
+    const answer = typeof admin === 'function' ? admin(query) : admin;
+    if (typeof answer === 'number') return new HttpResponse(null, { status: answer });
+    if (answer === undefined && backend.role !== 'ADMIN') {
+      return HttpResponse.json(
+        { message: 'Admin role required', statusCode: 403 },
+        { status: 403 },
+      );
+    }
+    const days = Number(query.get('days') ?? 30) as UsagePeriod;
+    return HttpResponse.json(answer ?? makeAdminStats({ days }));
   }),
 ];
 

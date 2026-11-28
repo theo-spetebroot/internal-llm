@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 
+import { cn } from '@/lib/utils';
+
 import type { UserStats } from './stats-api';
 import { formatCount, formatDuration, formatPerDay, formatTokens } from './usage-format';
 
-function FigureCard({
+export function FigureCard({
   label,
   value,
   detail,
@@ -49,7 +51,13 @@ export function KeyFigures({ stats, extra }: { stats: UserStats; extra?: ReactNo
   return (
     <dl
       aria-label="Chiffres clés"
-      className="grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(auto-fit,minmax(190px,1fr))] md:gap-3.5"
+      className={cn(
+        'grid grid-cols-2 gap-2.5 md:gap-3.5',
+        // A fifth card (the instance's active users) needs narrower columns to stay on the row.
+        extra
+          ? 'md:grid-cols-[repeat(auto-fit,minmax(160px,1fr))]'
+          : 'md:grid-cols-[repeat(auto-fit,minmax(190px,1fr))]',
+      )}
     >
       <FigureCard
         label="Requêtes"

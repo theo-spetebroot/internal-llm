@@ -6,6 +6,9 @@ import type { components } from '@/api/schema';
 import type { UsagePeriod } from './usage-period';
 
 export type UserStats = components['schemas']['UserStats'];
+/** The figures of the whole instance: those of `UserStats`, plus the users' ranking. */
+export type AdminStats = components['schemas']['AdminStats'];
+export type RankingEntry = components['schemas']['StatsUserRankingEntry'];
 /** One day of the per-day series. */
 export type DailyPoint = components['schemas']['StatsDailyPoint'];
 
@@ -18,6 +21,7 @@ export interface StatsQuery {
 export const statsKeys = {
   all: ['stats'] as const,
   me: (query: StatsQuery) => [...statsKeys.all, 'me', query] as const,
+  admin: (query: StatsQuery) => [...statsKeys.all, 'admin', query] as const,
 };
 
 /**
@@ -32,6 +36,24 @@ export function useMyStats(query: StatsQuery) {
       if (!data) throw new ApiError(response.status);
       return data;
     },
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * The usage of the whole instance (admins only: any other user is refused with a 403). Only
+ * asked for while `enabled`, i.e. while the instance view is open. Like `useMyStats`, it keeps
+ * the previous period on screen while another one loads.
+ */
+export function useAdminStats(query: StatsQuery, enabled: boolean) {
+  return useQuery({
+    queryKey: statsKeys.admin(query),
+    queryFn: async (): Promise<AdminStats> => {
+      const { data, response } = await api.GET('/api/admin/stats', { params: { query } });
+      if (!data) throw new ApiError(response.status);
+      return data;
+    },
+    enabled,
     placeholderData: keepPreviousData,
   });
 }

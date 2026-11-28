@@ -1,4 +1,4 @@
-import type { UserStats } from '@/usage/stats-api';
+import type { AdminStats, RankingEntry, UserStats } from '@/usage/stats-api';
 import type { UsagePeriod } from '@/usage/usage-period';
 
 /** Last day ("today") of the periods built here. */
@@ -60,5 +60,31 @@ export function makeUserStats(options: UserStatsOptions & Partial<UserStats> = {
     },
     daily,
     ...overrides,
+  };
+}
+
+/** One account of the ranking: by default, one that made no request. */
+export function makeRankingEntry(fields: Partial<RankingEntry> = {}): RankingEntry {
+  return {
+    email: 'ada@exemple.fr',
+    displayName: 'Ada Lovelace',
+    requests: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    failureRate: 0,
+    ...fields,
+  };
+}
+
+/**
+ * Instance-wide stats: those of `makeUserStats`, plus the ranking. `activeUsers` defaults to
+ * the number of accounts that made a request.
+ */
+export function makeAdminStats(options: UserStatsOptions & Partial<AdminStats> = {}): AdminStats {
+  const { users = [], activeUsers, ...figures } = options;
+  return {
+    ...makeUserStats(figures),
+    users,
+    activeUsers: activeUsers ?? users.filter((user) => user.requests > 0).length,
   };
 }
